@@ -1,0 +1,68 @@
+[gd_scene load_steps=8 format=2]
+
+[ext_resource path="res://assets/WorldMap16k.jpg" type="Texture" id=1]
+[ext_resource path="res://scripts/Earth.py" type="Script" id=3]
+[ext_resource path="res://scripts/Orbit.py" type="Script" id=6]
+
+[sub_resource type="SphereMesh" id=1]
+
+[sub_resource type="SpatialMaterial" id=2]
+albedo_texture = ExtResource( 1 )
+
+[sub_resource type="CubeMesh" id=3]
+
+[sub_resource type="CubeMesh" id=4]
+
+[node name="Orbit" type="Spatial"]
+script = ExtResource( 6 )
+
+[node name="Earth" type="Spatial" parent="."]
+transform = Transform( -4.37114e-08, 0, -1, 0, 1, 0, 1, 0, -4.37114e-08, 0, 0, 0 )
+script = ExtResource( 3 )
+
+[node name="MeshInstance" type="MeshInstance" parent="Earth"]
+transform = Transform( -2.78485e-06, 0, -63.71, 0, 63.71, 0, 63.71, 0, -2.78485e-06, 0, 0, 0 )
+mesh = SubResource( 1 )
+material/0 = SubResource( 2 )
+
+[node name="TelHai" type="MeshInstance" parent="Earth"]
+transform = Transform( 1, 0, 0, 0, 1, 0, 0, 0, 1, 43.34, 34.91, -31 )
+mesh = SubResource( 3 )
+
+[node name="NorthPole" type="MeshInstance" parent="Earth"]
+transform = Transform( 1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 63.71, 0 )
+mesh = SubResource( 3 )
+
+[node name="SouthPole" type="MeshInstance" parent="Earth"]
+transform = Transform( 1, 0, 0, 0, 1, 0, 0, 0, 1, 0, -63.71, 0 )
+mesh = SubResource( 3 )
+
+[node name="NewYork" type="MeshInstance" parent="Earth"]
+transform = Transform( 1, 0, 0, 0, 1, 0, 0, 0, 1, 13.3, 41.55, 46.42 )
+mesh = SubResource( 4 )
+
+[node name="NewZealand" type="MeshInstance" parent="Earth"]
+transform = Transform( 1, 0, 0, 0, 1, 0, 0, 0, 1, -50.88, -38.05, -3.58743 )
+mesh = SubResource( 4 )
+
+[node name="Spain" type="MeshInstance" parent="Earth"]
+transform = Transform( 1, 0, 0, 0, 1, 0, 0, 0, 1, 48.6199, 41.55, 2.05032 )
+mesh = SubResource( 4 )
+
+[node name="Camera" type="Camera" parent="."]
+transform = Transform( 1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 137.46 )
+projection = 1
+current = true
+size = 148.033
+near = 0.25
+far = 457.7
+
+[node name="Camera2" type="Camera" parent="."]
+transform = Transform( 0.10826, -0.269527, 0.956888, 0, 0.962545, 0.271121, -0.994123, -0.0293514, 0.104205, 84.897, 21.6733, 3.55787 )
+projection = 1
+current = true
+size = 150.0
+near = 0.25
+far = 457.7
+
+[node name="DirectionalLight" type="DirectionalLight" parent="."]

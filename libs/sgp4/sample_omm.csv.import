@@ -1,0 +1,17 @@
+[remap]
+
+importer="csv_translation"
+type="Translation"
+uid="uid://b8154x1kd7nif"
+
+[deps]
+
+files=["res://libs/sgp4/sample_omm.OBJECT_ID.translation", "res://libs/sgp4/sample_omm.EPOCH.translation", "res://libs/sgp4/sample_omm.MEAN.translation", "res://libs/sgp4/sample_omm.ECCENTRICITY.translation", "res://libs/sgp4/sample_omm.INCLINATION.translation", "res://libs/sgp4/sample_omm.RA_OF.translation", "res://libs/sgp4/sample_omm.ARG_OF.translation", "res://libs/sgp4/sample_omm.MEAN.translation", "res://libs/sgp4/sample_omm.EPHEMERIS.translation", "res://libs/sgp4/sample_omm.CLASSIFICATION.translation", "res://libs/sgp4/sample_omm.NORAD_ID.translation", "res://libs/sgp4/sample_omm.ELEMENT_NO.translation", "res://libs/sgp4/sample_omm.REV_AT.translation", "res://libs/sgp4/sample_omm.BSTAR.translation", "res://libs/sgp4/sample_omm.MEAN.translation", "res://libs/sgp4/sample_omm.MEAN.translation"]
+
+source_file="res://libs/sgp4/sample_omm.csv"
+dest_files=["res://libs/sgp4/sample_omm.OBJECT_ID.translation", "res://libs/sgp4/sample_omm.EPOCH.translation", "res://libs/sgp4/sample_omm.MEAN.translation", "res://libs/sgp4/sample_omm.ECCENTRICITY.translation", "res://libs/sgp4/sample_omm.INCLINATION.translation", "res://libs/sgp4/sample_omm.RA_OF.translation", "res://libs/sgp4/sample_omm.ARG_OF.translation", "res://libs/sgp4/sample_omm.MEAN.translation", "res://libs/sgp4/sample_omm.EPHEMERIS.translation", "res://libs/sgp4/sample_omm.CLASSIFICATION.translation", "res://libs/sgp4/sample_omm.NORAD_ID.translation", "res://libs/sgp4/sample_omm.ELEMENT_NO.translation", "res://libs/sgp4/sample_omm.REV_AT.translation", "res://libs/sgp4/sample_omm.BSTAR.translation", "res://libs/sgp4/sample_omm.MEAN.translation", "res://libs/sgp4/sample_omm.MEAN.translation"]
+
+[params]
+
+compress=true
+delimiter=0
