@@ -1,5 +1,5 @@
-#from godot import exposed, export
-from py4godot import *
+from godot import exposed, export
+from godot import *
 import sys
 
 sys.path.append('./')

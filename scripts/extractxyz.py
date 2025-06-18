@@ -1,6 +1,6 @@
 from sgp4.api import jday
 from sgp4.api import Satrec
-from py4godot import Vector3
+from godot import Vector3
 from io import StringIO
 
 

@@ -1,5 +1,5 @@
-#from godot import exposed, export
-from py4godot import *
+from godot import exposed, export
+from godot import *
 from datetime import datetime, timedelta
 import sys, os
 import time

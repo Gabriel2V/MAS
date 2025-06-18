@@ -1,5 +1,5 @@
-#from py4godot import exposed, export
-from py4godot import Node
+from godot import exposed, export
+from godot import Node
 
 SECOND = 1
 MINUTE = 60 * SECOND
