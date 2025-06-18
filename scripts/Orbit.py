@@ -30,33 +30,57 @@ def FindMaxRadius(satellite):
 
 @exposed
 class Orbit(Spatial):
-	
-	history_file_path = "historyNS.txt"
-	curtime = datetime.now()
-	Satellite = ResourceLoader.load('scenes/Satellite.tscn')
-	tlefilename = "starlink.tle"
-	tlestring = ""
-	satellitelist = []
-	special_child = Spatial.new()
-	lines_child = Spatial.new()
-	iter = 0
-	# max_iter = 1000
-	
-	
+	# Aggiungi queste variabili export per configurazione
+	simulation_mode = export(bool, default=False)  # True per Walker Delta, False per TLE
+	walker_params = export(Dictionary, default={
+		'total_sats': 24,
+		'num_planes': 3,
+		'altitude_km': 550,
+		'inclination_deg': 53
+	})
 
 	def _ready(self):
-		# Settings
-		self.Stations = [self.get_node("Earth/NewZealand"),
-			self.get_node("Earth/Spain")]
-		self.LineColor = Color(0,1,0)
-		
+		if self.simulation_mode:
+			self.initialize_walker_constellation()
+		else:
+			self.initialize_tle_system()  # Il tuo metodo attuale
 
+	def initialize_walker_constellation(self):
+		"""Inizializza la costellazione Walker Delta"""
+		earth_radius = 6371  # km
+		self.orbit_radius = earth_radius + self.walker_params['altitude_km']
 		
-		self.deprecated_sats = []
+		# Calcolo parametri Walker
+		sats_per_plane = self.walker_params['total_sats'] // self.walker_params['num_planes']
+		phase_step = 360 / self.walker_params['total_sats'] * self.walker_params.get('phase_shift', 1)
 		
+		for plane in range(self.walker_params['num_planes']):
+			plane_node = Spatial.new()
+			plane_node.set_name(f"Plane_{plane}")
+			
+			# Aggiungi qui la logica di posizionamento satelliti
+			for sat_num in range(sats_per_plane):
+				sat = self.Satellite.instance()
+				# Configura posizione iniziale
+				angle = 2 * PI * sat_num / sats_per_plane
+				phase_offset = deg2rad(phase_step * plane)
+				
+				# Posiziona il satellite
+				sat.angular_position = (angle + phase_offset) % (2 * PI)
+				sat.orbit_id = plane
+				sat.set_name(f"Walker_{plane}_{sat_num}")
+				
+				plane_node.add_child(sat)
+			
+			self.add_child(plane_node)
+
+	def initialize_tle_system(self):
+		"""Mantieni la tua attuale implementazione TLE"""
+		# Il tuo codice esistente qui
 		with open(self.tlefilename, 'r') as file:
 			self.tlestring = file.read()
 		self.satellitelist = extractxyz(self.tlestring, self.curtime)
+		
 		print("children count:", self.special_child.get_child_count())
 		print("children:", self.special_child.get_children())
 		for sat in self.satellitelist:#[:int(len(self.satellitelist)/4)]:
@@ -149,17 +173,63 @@ class Orbit(Spatial):
 		img.save_png(screenshot_name)
 		
 		self.append_history(path)
+		#Raccolta metriche
+		self.collect_metrics()
+	
+def collect_metrics(self):
+	# Calcola uniformità della distribuzione
+	angular_positions = []
+	for sat in self.satellites:
+		if sat.operational:
+			angular_positions.append(sat.angular_position)
+	
+	angular_positions.sort()
+	spacings = [(angular_positions[(i+1)%len(angular_positions)] - angular_positions[i]) % (2*math.pi)
+				 for i in range(len(angular_positions))]
+	
+	uniformity = math.sqrt(sum((s - 2*math.pi/len(angular_positions))**2 for s in spacings) / len(spacings))
+	
+	# Registra metriche
+	with open("metrics.csv", "a") as f:
+		f.write(f"{OS.get_system_time_msecs()},{uniformity},{len(angular_positions)}\n")
 
 
-	def append_history(self, path):
-		return
-		total_cost = path[-1]
-		hops = len(path[0])
+def append_history(self, path):
+	"""Registra dati più completi per l'analisi"""
+	total_cost = path[-1]  # Latenza totale
+	hops = len(path[0])    # Numero di salti
+	
+	# Calcola metriche del sistema
+	active_sats = sum(1 for sat in self.special_child.get_children() 
+					if sat.operational)
+	
+	# Calcola uniformità (solo in modalità simulazione)
+	if self.simulation_mode:
+		uniformity = self.calculate_uniformity()
+	else:
+		uniformity = 0  # Non applicabile per TLE
+	
+	with open(self.history_file_path, 'a+') as history_file:
+		history_file.write(f"{total_cost},{hops},{active_sats},{uniformity}\n")
+
+def calculate_uniformity(self):
+	"""Calcola l'uniformità della distribuzione angolare"""
+	if not self.simulation_mode:
+		return 0
 		
-		stotal_cost = str(total_cost)
-		shops = str(hops)
-		with open(self.history_file_path, 'a+') as history_file:
-			history_file.write(stotal_cost + "," + shops + f'\n')
+	angles = []
+	for plane in self.get_children():
+		for sat in plane.get_children():
+			if sat.operational:
+				angles.append(sat.angular_position)
+	
+	if len(angles) < 2:
+		return 0
+		
+	angles.sort()
+	spacings = np.diff(angles + [angles[0] + 2*np.pi])
+	ideal_spacing = 2*np.pi / len(angles)
+	return np.std(spacings) / ideal_spacing  # Deviazione standard normalizzata
 
 
 	def _get_line_material(self):
