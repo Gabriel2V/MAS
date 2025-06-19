@@ -1,11 +1,38 @@
-[gd_scene load_steps=3 format=2]
+[gd_scene load_steps=7 format=2]
 
 [ext_resource path="res://scripts/logic/Earth.gd" type="Script" id=1]
+[ext_resource path="res://assets/WorldMap16k.jpg" type="Texture" id=2]
+[ext_resource path="res://scenes/Satellite.tscn" type="PackedScene" id=3]
+
+[sub_resource type="SpatialMaterial" id=5]
+vertex_color_use_as_albedo = true
+albedo_texture = ExtResource( 2 )
 
 [sub_resource type="SphereMesh" id=1]
+material = SubResource( 5 )
+flip_faces = true
+
+[sub_resource type="Skin" id=2]
 
 [node name="Main" type="Spatial"]
 
-[node name="Earth" type="MeshInstance" parent="."]
+[node name="EarthInstance" type="Node" parent="."]
+
+[node name="Earth" type="MeshInstance" parent="EarthInstance"]
 mesh = SubResource( 1 )
+skin = SubResource( 2 )
+skeleton = NodePath("../..")
 script = ExtResource( 1 )
+
+[node name="Satellite" parent="." instance=ExtResource( 3 )]
+transform = Transform( 0.059, 0, 0, 0, 0.059, 0, 0, 0, 0.059, 0, 0, 0 )
+
+[node name="Camera" type="Camera" parent="."]
+transform = Transform( 1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 100 )
+projection = 1
+current = true
+size = 6.0
+near = 0.68
+far = 418.4
+
+[node name="DirectionalLight" type="DirectionalLight" parent="."]
