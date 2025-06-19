@@ -19,7 +19,8 @@ func rotate_orbit():
 	var radius = 10.0 + orbit_id * 5
 	var x = radius * cos(theta)
 	var z = radius * sin(theta)
-	translation = Vector3(x, 0, z)
+	var y = 0.0
+	translation = Vector3(x, y, z)
 
 func send_heartbeat(delta):
 	heartbeat_timer += delta
