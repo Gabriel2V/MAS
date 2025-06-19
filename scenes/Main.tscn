@@ -1,8 +1,9 @@
-[gd_scene load_steps=7 format=2]
+[gd_scene load_steps=8 format=2]
 
 [ext_resource path="res://scripts/logic/Earth.gd" type="Script" id=1]
 [ext_resource path="res://assets/WorldMap16k.jpg" type="Texture" id=2]
-[ext_resource path="res://scenes/ConstellationManager.tscn" type="PackedScene" id=4]
+[ext_resource path="res://scenes/Main.gd" type="Script" id=3]
+[ext_resource path="res://scenes/CameraReactiveScript.gd" type="Script" id=4]
 
 [sub_resource type="SpatialMaterial" id=5]
 vertex_color_use_as_albedo = true
@@ -15,6 +16,9 @@ flip_faces = true
 [sub_resource type="Skin" id=2]
 
 [node name="Main" type="Spatial"]
+script = ExtResource( 3 )
+
+[node name="MultiMeshInstance" type="MultiMeshInstance" parent="."]
 
 [node name="EarthInstance" type="Node" parent="."]
 
@@ -25,14 +29,15 @@ skin = SubResource( 2 )
 skeleton = NodePath("../..")
 script = ExtResource( 1 )
 
-[node name="Camera" type="Camera" parent="."]
+[node name="DirectionalLight" type="DirectionalLight" parent="."]
+
+[node name="CameraRig" type="Spatial" parent="."]
+script = ExtResource( 4 )
+
+[node name="Camera" type="Camera" parent="CameraRig"]
 transform = Transform( 1, 0, 0, 0, 0.707107, 0.707107, 0, -0.707107, 0.707107, 0, 40, 40 )
 projection = 1
 current = true
-size = 12.0
+size = 30.0
 near = 0.68
 far = 418.4
-
-[node name="DirectionalLight" type="DirectionalLight" parent="."]
-
-[node name="ConstellationManager" parent="." instance=ExtResource( 4 )]
