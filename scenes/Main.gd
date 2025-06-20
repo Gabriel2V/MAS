@@ -1,8 +1,8 @@
 extends Node
 
-export(int) var satellites_per_orbit = 5
-export(int) var orbit_count = 3
-export(float) var orbit_radius = 20.0
+export(int) var satellites_per_orbit = 50
+export(int) var orbit_count = 25
+export(float) var orbit_radius = 25.0
 export(float) var orbit_inclination_deg = 53.0
 export(int) var walker_f = 1  # Phase factor (0 <= f < orbit_count)
 
@@ -64,7 +64,9 @@ func _ready():
 				"last_heartbeat": {prev: 0.0, next: 0.0},
 				"heartbeat_timer": 0.0,
 				"active": true,
-				"angular_velocity": angular_velocity
+				"angular_velocity": angular_velocity,
+				"falling": false,
+				"fall_timer": 0.0
 			})
 			
 			id += 1
@@ -90,30 +92,52 @@ func _process(delta):
 		for sat in range(satellites_per_orbit):
 			#satellite_angles[id] += angular_velocity * delta			
 			if satellites[id].active and randf() < fault_probability * delta: 
-				satellites[id].active = false
+				#satellites[id].active = false
+				satellites[id].falling = true
+				satellites[id].fall_timer = 0.0
 				print("Satellite ", id, " FAILED")
 			
 			# Update angolo solo se attivo
-			if satellites[id].active :
+			if satellites[id].active or satellites[id].falling:
 				satellite_angles[id] += satellites[id].angular_velocity * delta
 			
-			# Colore in base allo stato operativo
-			var color = Color(0.0, 1.0, 0.0) 
-			if satellites[id].active == false :
-				color =  Color(1.0, 0.0, 0.0)
-			multi_mesh_instance.multimesh.set_instance_custom_data(id, color)
-				
 			var theta = satellite_angles[id]
 			var pos = orbital_position(orbit_radius, orbit_inclination_deg, RAAN, theta)
+			
+			# Se sta cadendo, scende
+			if satellites[id].falling:
+				satellites[id].fall_timer += delta
+				var descent = satellites[id].fall_timer * 2.0
+				pos.y -= descent
+
+				# Dopo 5s, disattiva del tutto e nascondi
+				if satellites[id].fall_timer >= 5.0:
+					var transform = Transform().translated(Vector3(0, -1000, 0))
+					multi_mesh_instance.multimesh.set_instance_transform(id, transform)
+					satellites[id].active = false
+					satellites[id].falling = false
+					id += 1
+					continue
+
+			# Aggiorna posizione
 			var transform = Transform().translated(pos)
 			transform.basis = Basis().scaled(Vector3.ONE * 0.3)
-			
-			# Aggiorna anche angolo interno
-			satellites[id].theta = theta
 			multi_mesh_instance.multimesh.set_instance_transform(id, transform)
+
+			# Colore in base allo stato
+			var color = Color(0, 1, 0)  # verde
+			if satellites[id].falling:
+				color = Color(1.0, 0.5, 0.0)  # arancione
+			elif not satellites[id].active:
+				color = Color(1.0, 0.0, 0.0)  # rosso
+
+			multi_mesh_instance.multimesh.set_instance_custom_data(id, color)
+
+			# Aggiorna angolo
+			satellites[id].theta = theta
 			id += 1
+
 	update_heartbeats(delta)
-	
 	
 func update_heartbeats(delta):
 	for sat in satellites:

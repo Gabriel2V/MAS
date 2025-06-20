@@ -47,3 +47,4 @@ shader_param/uv2_offset = Vector3( 0, 0, 0 )
 
 [resource]
 material = SubResource( 2 )
+size = Vector3( 0.8, 0.8, 0.8 )
