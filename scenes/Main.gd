@@ -5,12 +5,18 @@ export(int) var orbit_count = 25
 export(float) var orbit_radius = 25.0
 export(float) var orbit_inclination_deg = 53.0
 export(int) var walker_f = 1  # Phase factor (0 <= f < orbit_count)
+export(float, 0.1, 10.0) var simulation_speed := 1.0 # 1.0 = tempo normale
+
 
 onready var multi_mesh_instance := $MultiMeshInstance
+onready var option_btn := $Control/SpeedButton
+onready var status_label = $Label 
 
 var total_satellites = satellites_per_orbit * orbit_count
 var satellite_angles = []
 var angular_velocity = 2 * PI / satellites_per_orbit # rad/s
+var live_count = total_satellites
+var fallen_count = 0
 
 var satellites = [] # ogni elemento: {id, orbit_id, theta, neighbors, last_heartbeat_times}
 export(float) var fault_probability = 0.001 # probabilità al secondo di fault
@@ -18,6 +24,14 @@ export(float) var fault_probability = 0.001 # probabilità al secondo di fault
 
 
 func _ready():
+	option_btn = get_node_or_null("Control/SpeedButton")
+	option_btn.clear()
+	option_btn.add_item("Stop", 0)
+	option_btn.add_item("0.5x", 1)
+	option_btn.add_item("1x", 2)
+	option_btn.add_item("2x", 3)
+	option_btn.select(2)
+	
 	multi_mesh_instance = get_node_or_null("MultiMeshInstance")
 	if not multi_mesh_instance:
 		printerr("ERRORE: Nodo MultiMeshInstance non trovato nella scena!")
@@ -86,6 +100,8 @@ func orbital_position(radius: float, inclination_deg: float, RAAN: float, anomal
 
 
 func _process(delta):
+	
+	delta *= simulation_speed
 	var id = 0
 	for orbit in range(orbit_count):
 		var RAAN = deg2rad(orbit * 360.0 / orbit_count)
@@ -96,6 +112,8 @@ func _process(delta):
 				satellites[id].falling = true
 				satellites[id].fall_timer = 0.0
 				print("Satellite ", id, " FAILED")
+				fallen_count += 1
+				live_count -= 1
 			
 			# Update angolo solo se attivo
 			if satellites[id].active or satellites[id].falling:
@@ -139,6 +157,7 @@ func _process(delta):
 			id += 1
 
 	update_heartbeats(delta)
+	status_label.text = "Live satellites: %d \n Dead satellites: %d" % [live_count, fallen_count]
 	
 func update_heartbeats(delta):
 	for sat in satellites:
@@ -186,3 +205,14 @@ func estimate_coverage():
 	var coverage_percent = float(visible) / float(total_satellites) * 100.0
 	print("🛰 Copertura stimata: ", coverage_percent, "%")
 
+
+func _on_SpeedButton_item_selected(index):
+	match index:
+		0:
+			simulation_speed = 0
+		1:
+			simulation_speed = 0.5
+		2:
+			simulation_speed = 1
+		3:
+			simulation_speed = 2

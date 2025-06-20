@@ -11,21 +11,20 @@ albedo_texture = ExtResource( 2 )
 
 [sub_resource type="SphereMesh" id=1]
 material = SubResource( 5 )
-flip_faces = true
 
 [sub_resource type="Skin" id=2]
 
 [node name="Main" type="Spatial"]
 script = ExtResource( 3 )
-satellites_per_orbit = 11
-orbit_count = 1
+satellites_per_orbit = 15
+orbit_count = 37
 
 [node name="MultiMeshInstance" type="MultiMeshInstance" parent="."]
 
 [node name="EarthInstance" type="Node" parent="."]
 
 [node name="Earth" type="MeshInstance" parent="EarthInstance"]
-transform = Transform( 2.5, 0, 0, 0, 2.5, 0, 0, 0, 2.5, 0, 0, 0 )
+transform = Transform( 18, 0, 0, 0, 18, 0, 0, 0, 18, 0, 0, 0 )
 mesh = SubResource( 1 )
 skin = SubResource( 2 )
 skeleton = NodePath("../..")
@@ -43,3 +42,20 @@ current = true
 size = 30.0
 near = 0.68
 far = 418.4
+
+[node name="Control" type="Control" parent="."]
+margin_right = 40.0
+margin_bottom = 40.0
+
+[node name="SpeedButton" type="OptionButton" parent="Control"]
+margin_right = 137.0
+margin_bottom = 52.0
+
+[node name="Label" type="Label" parent="."]
+margin_left = 884.0
+margin_right = 977.0
+margin_bottom = 14.0
+text = "Live satellites:
+Dead satellites: "
+
+[connection signal="item_selected" from="Control/SpeedButton" to="." method="_on_SpeedButton_item_selected"]
