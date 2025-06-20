@@ -110,14 +110,15 @@ func _process(delta):
 				var descent = satellites[id].fall_timer * 2.0
 				pos.y -= descent
 
-				# Dopo 5s, disattiva del tutto e nascondi
-				if satellites[id].fall_timer >= 5.0:
-					var transform = Transform().translated(Vector3(0, -1000, 0))
-					multi_mesh_instance.multimesh.set_instance_transform(id, transform)
-					satellites[id].active = false
-					satellites[id].falling = false
-					id += 1
-					continue
+			# Dopo 5s, disattiva del tutto e nascondi
+			if satellites[id].fall_timer >= 5.0:
+				var transform = multi_mesh_instance.multimesh.get_instance_transform(id)
+				transform.basis = Basis().scaled(Vector3(0, 0, 0))
+				multi_mesh_instance.multimesh.set_instance_transform(id, transform)
+				satellites[id].active = false
+				satellites[id].falling = false
+				id += 1
+				continue
 
 			# Aggiorna posizione
 			var transform = Transform().translated(pos)

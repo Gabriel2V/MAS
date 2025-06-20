@@ -17,6 +17,8 @@ flip_faces = true
 
 [node name="Main" type="Spatial"]
 script = ExtResource( 3 )
+satellites_per_orbit = 11
+orbit_count = 1
 
 [node name="MultiMeshInstance" type="MultiMeshInstance" parent="."]
 
