@@ -6,6 +6,7 @@ var last_mouse_pos = Vector2()
 var zoom_speed = 2.0
 
 func _ready():
+	$Camera.look_at(Vector3(0, 0, 0), Vector3.UP)
 	pass
 	
 
@@ -32,7 +33,7 @@ func _unhandled_input(event):
 			zoom_camera(zoom_speed)
 
 func zoom_camera(amount):
-	$Camera.size += amount
+	$Camera.size = clamp($Camera.size + amount, 1000, 30000)
 
 
 func _on_HSlider_value_changed(value):

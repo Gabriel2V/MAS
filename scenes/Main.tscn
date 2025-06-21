@@ -24,7 +24,7 @@ orbit_count = 37
 [node name="EarthInstance" type="Node" parent="."]
 
 [node name="Earth" type="MeshInstance" parent="EarthInstance"]
-transform = Transform( 18, 0, 0, 0, 18, 0, 0, 0, 18, 0, 0, 0 )
+transform = Transform( 6371, 0, 0, 0, 6371, 0, 0, 0, 6371, 0, 0, 0 )
 mesh = SubResource( 1 )
 skin = SubResource( 2 )
 skeleton = NodePath("../..")
@@ -36,12 +36,12 @@ script = ExtResource( 1 )
 script = ExtResource( 4 )
 
 [node name="Camera" type="Camera" parent="CameraRig"]
-transform = Transform( 1, 0, 0, 0, 0.707107, 0.707107, 0, -0.707107, 0.707107, 0, 40, 40 )
+transform = Transform( 1, 0, 0, 0, 0.707107, 0.707107, 0, -0.707107, 0.707107, 0, 0, 16000 )
 projection = 1
 current = true
-size = 30.0
-near = 0.68
-far = 418.4
+size = 15000.0
+near = 1.0
+far = 50000.0
 
 [node name="Control" type="Control" parent="."]
 margin_right = 40.0

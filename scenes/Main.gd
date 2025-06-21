@@ -2,7 +2,7 @@ extends Node
 
 export(int) var satellites_per_orbit = 50
 export(int) var orbit_count = 25
-export(float) var orbit_radius = 25.0
+export(float) var orbit_radius = 7000
 export(float) var orbit_inclination_deg = 53.0
 export(int) var walker_f = 1  # Phase factor (0 <= f < orbit_count)
 export(float, 0.1, 10.0) var simulation_speed := 1.0 # 1.0 = tempo normale
@@ -20,6 +20,12 @@ var fallen_count = 0
 
 var satellites = [] # ogni elemento: {id, orbit_id, theta, neighbors, last_heartbeat_times}
 export(float) var fault_probability = 0.001 # probabilità al secondo di fault
+
+const LAT_STEP = 10
+const LON_STEP = 10
+const EARTH_RADIUS = 6371.0
+const COVERAGE_RADIUS_KM = 1000.0
+var earth_grid = []  # griglia di celle con copertura
 
 
 
@@ -84,6 +90,7 @@ func _ready():
 			})
 			
 			id += 1
+	initialize_earth_grid()
 
 
 func orbital_position(radius: float, inclination_deg: float, RAAN: float, anomaly: float) -> Vector3:
@@ -157,6 +164,9 @@ func _process(delta):
 			id += 1
 
 	update_heartbeats(delta)
+	update_coverage()
+	estimate_coverage()
+
 	status_label.text = "Live satellites: %d \n Dead satellites: %d" % [live_count, fallen_count]
 	
 func update_heartbeats(delta):
@@ -171,7 +181,7 @@ func update_heartbeats(delta):
 				# Simula ricezione dal satellite verso il vicino
 				var neighbor = satellites[neighbor_id]
 				neighbor.last_heartbeat[sat.id] = 0.0
-				print("Satellite ", sat.id, " sends heartbeat to ", neighbor_id)
+				#print("Satellite ", sat.id, " sends heartbeat to ", neighbor_id)
 			sat.heartbeat_timer = 0.0
 
 		# Controlla se un vicino è considerato morto
@@ -195,16 +205,7 @@ func update_angular_velocities():
 		var new_velocity = 2 * PI / count
 		for s in sats_in_orbit:
 			s.angular_velocity = new_velocity
-
-func estimate_coverage():
-	var active_satellites = []
-	for s in satellites:
-		if s.active:
-			active_satellites.append(s)
-	var visible = active_satellites.size()
-	var coverage_percent = float(visible) / float(total_satellites) * 100.0
-	print("🛰 Copertura stimata: ", coverage_percent, "%")
-
+			
 
 func _on_SpeedButton_item_selected(index):
 	match index:
@@ -216,3 +217,53 @@ func _on_SpeedButton_item_selected(index):
 			simulation_speed = 1
 		3:
 			simulation_speed = 2
+
+func initialize_earth_grid():
+	earth_grid.clear()
+	for lat in range(-90, 90, LAT_STEP):
+		for lon in range(-180, 180, LON_STEP):
+			earth_grid.append({
+				"lat": lat,
+				"lon": lon,
+				"covered": false,
+				"covered_count": 0  # utile per media nel tempo
+			})
+
+func is_cell_covered(cell_lat: float, cell_lon: float, sat_pos: Vector3) -> bool:
+	# Converti cella in coordinate 3D (approssimazione sferica)
+	var cell_lat_rad = deg2rad(cell_lat)
+	var cell_lon_rad = deg2rad(cell_lon)
+	var cell_x = EARTH_RADIUS * cos(cell_lat_rad) * cos(cell_lon_rad)
+	var cell_y = EARTH_RADIUS * sin(cell_lat_rad)
+	var cell_z = EARTH_RADIUS * cos(cell_lat_rad) * sin(cell_lon_rad)
+	var cell_pos = Vector3(cell_x, cell_y, cell_z)
+
+	var distance = sat_pos.distance_to(cell_pos)
+	return distance <= COVERAGE_RADIUS_KM
+
+func update_coverage():
+	for cell in earth_grid:
+		cell.covered = false
+
+	for s in satellites:
+		if not s.active:
+			continue
+		var RAAN = deg2rad(s.orbit_id * 360.0 / orbit_count)
+		var pos = orbital_position(orbit_radius, orbit_inclination_deg, RAAN, s.theta)
+
+		for cell in earth_grid:
+			if is_cell_covered(cell.lat, cell.lon, pos):
+				cell.covered = true
+	
+	# Aggiorna conteggio per media
+	for cell in earth_grid:
+		if cell.covered:
+			cell.covered_count += 1
+
+func estimate_coverage():
+	var covered_cells = 0
+	for cell in earth_grid:
+		if cell.covered:
+			covered_cells += 1
+	var percent = float(covered_cells) / float(earth_grid.size()) * 100.0
+	print("🗺️ Copertura terrestre: ", percent, "%")
