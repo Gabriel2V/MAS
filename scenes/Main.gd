@@ -1,9 +1,9 @@
 extends Node
 
-export(int) var satellites_per_orbit = 50
-export(int) var orbit_count = 25
+export(int) var satellites_per_orbit = 20 #50
+export(int) var orbit_count = 36 #25
 export(float) var orbit_radius = 70.00
-export(float) var orbit_inclination_deg = 53.0
+export(float) var orbit_inclination_deg = 53.0 # 53
 export(int) var walker_f = 1  # Phase factor (0 <= f < orbit_count)
 export(float, 0.1, 10.0) var simulation_speed := 1.0 # 1.0 = tempo normale
 
@@ -26,6 +26,14 @@ const LON_STEP = 100
 const EARTH_RADIUS = 63.710
 const COVERAGE_RADIUS_KM = 10.000
 var earth_grid = []  # griglia di celle con copertura
+
+var map_width := int(360 / LON_STEP)  # 36 per LON_STEP=10
+var map_height := int(180 / LAT_STEP)  # 18 per LAT_STEP=10
+#var map_width := 180 # 180° longitudine / passo
+#var map_height := 90 # 90° latitudine / passo
+var coverage_image : Image
+var coverage_texture : ImageTexture
+
 
 
 
@@ -91,13 +99,15 @@ func _ready():
 			
 			id += 1
 	initialize_earth_grid()
+	#init_coverage_map()
+	#setup_ui_layout()
 
 
 func orbital_position(radius: float, inclination_deg: float, RAAN: float, anomaly: float) -> Vector3:
 	var inclination = deg2rad(inclination_deg)
 	var x = radius * cos(anomaly)
-	var y = radius * sin(anomaly)
-	var z = 0.0
+	var z = radius * sin(anomaly)
+	var y = 0.0
 	var pos = Vector3(x, y, z)
 
 	pos = pos.rotated(Vector3(1, 0, 0), inclination)
@@ -242,8 +252,12 @@ func is_cell_covered(cell_lat: float, cell_lon: float, sat_pos: Vector3) -> bool
 	return distance <= COVERAGE_RADIUS_KM
 
 func update_coverage():
-	for cell in earth_grid:
-		cell.covered = false
+	# Verifica che coverage_image sia inizializzata
+	#if coverage_image == null:
+	#	print("ERRORE: coverage_image è null!")
+	#	return
+	#for cell in earth_grid:
+	#	cell.covered = false
 
 	for s in satellites:
 		if not s.active:
@@ -259,11 +273,97 @@ func update_coverage():
 	for cell in earth_grid:
 		if cell.covered:
 			cell.covered_count += 1
+	# Update image
+	#coverage_image.lock()
+	#for cell in earth_grid:
+	#	var x = int((cell.lon + 180) / LON_STEP)
+	#	var y = int((90 - cell.lat) / LAT_STEP)
+	#	var color = Color(0.1, 0.1, 0.1) # default: dark gray
+	#	if cell.covered:
+	#		color = Color(0.0, 1.0, 0.0) # green
+	#	coverage_image.set_pixel(x, y, color)
+	#coverage_image.unlock()
+	#coverage_texture.set_data(coverage_image)
 
 func estimate_coverage():
 	var covered_cells = 0
 	for cell in earth_grid:
 		if cell.covered:
 			covered_cells += 1
-	var percent = float(covered_cells) / float(earth_grid.size()) * 100.0
-	print("🗺️ Copertura terrestre: ", percent, "%")
+	var percent := float(covered_cells) / float(earth_grid.size()) * 100.0
+	# AGGIORNA UI
+	if has_node("Control/HBoxContainer/TextureProgress"):
+		var bar = get_node("Control/HBoxContainer/TextureProgress")
+		bar.value = percent
+	if has_node("Control/HBoxContainer/CoverageLabel"):
+		var lbl = get_node("Control/HBoxContainer/CoverageLabel")
+		lbl.text = "Copertura: %.2f%%" % percent
+		
+#func init_coverage_map():
+#	coverage_image = Image.new()
+#	coverage_image.create(map_width, map_height, false, Image.FORMAT_RGB8)
+#	coverage_texture = ImageTexture.new()
+#	coverage_texture.create_from_image(coverage_image)
+
+#	$Control/CoverageMapPanel/CoverageMapTexture.texture = coverage_texture
+	# Verifica che il nodo esista prima di assegnare la texture
+	
+#func setup_ui_layout():
+#	# Posiziona il label dei satelliti in alto a destra
+#	if status_label:
+#		status_label.anchor_left = 1.0
+#		status_label.anchor_right = 1.0
+#		status_label.anchor_top = 0.0
+#		status_label.anchor_bottom = 0.0
+#		status_label.margin_left = -200
+#		status_label.margin_right = -10
+#		status_label.margin_top = 10
+#		status_label.margin_bottom = 60
+#
+#	# Posiziona il bottone velocità in alto a sinistra
+#	if option_btn:
+#		option_btn.anchor_left = 0.0
+#		option_btn.anchor_right = 0.0
+#		option_btn.anchor_top = 0.0
+#		option_btn.anchor_bottom = 0.0
+#		option_btn.margin_left = 10
+#		option_btn.margin_right = 120
+#		option_btn.margin_top = 10
+#		option_btn.margin_bottom = 40
+#
+#	# Posiziona la barra di copertura in alto al centro
+#	if has_node("Control/HBoxContainer"):
+#		var hbox = $Control/HBoxContainer
+#		hbox.anchor_left = 0.5
+#		hbox.anchor_right = 0.5
+#		hbox.anchor_top = 0.0
+#		hbox.anchor_bottom = 0.0
+#		hbox.margin_left = -150
+#		hbox.margin_right = 150
+#		hbox.margin_top = 10
+#		hbox.margin_bottom = 40
+#
+#	# Posiziona il panel della mappa in basso a destra
+#	if has_node("Control/CoverageMapPanel"):
+#		var panel = $Control/CoverageMapPanel
+#		panel.anchor_left = 1.0
+#		panel.anchor_right = 1.0
+#		panel.anchor_top = 1.0
+#		panel.anchor_bottom = 1.0
+#		panel.margin_left = -220
+#		panel.margin_right = -10
+#		panel.margin_top = -120
+#		panel.margin_bottom = -10
+#
+#		# Imposta dimensioni del TextureRect dentro il panel
+#		if has_node("Control/CoverageMapPanel/CoverageMapTexture"):
+#			var texture_rect = $Control/CoverageMapPanel/CoverageMapTexture
+#			texture_rect.anchor_left = 0.0
+#			texture_rect.anchor_right = 1.0
+#			texture_rect.anchor_top = 0.0
+#			texture_rect.anchor_bottom = 1.0
+#			texture_rect.margin_left = 5
+#			texture_rect.margin_right = -5
+#			texture_rect.margin_top = 5
+#			texture_rect.margin_bottom = -5
+#

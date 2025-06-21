@@ -51,6 +51,25 @@ margin_bottom = 40.0
 margin_right = 137.0
 margin_bottom = 52.0
 
+[node name="HBoxContainer" type="HBoxContainer" parent="Control"]
+margin_right = 40.0
+margin_bottom = 40.0
+
+[node name="CoverageLabel" type="Label" parent="Control/HBoxContainer"]
+margin_top = 13.0
+margin_bottom = 27.0
+
+[node name="TextureProgress" type="TextureProgress" parent="Control/HBoxContainer"]
+margin_left = 4.0
+margin_right = 5.0
+margin_bottom = 40.0
+
+[node name="CoverageMapPanel" type="Panel" parent="Control"]
+
+[node name="CoverageMapTexture" type="TextureRect" parent="Control/CoverageMapPanel"]
+margin_right = 40.0
+margin_bottom = 40.0
+
 [node name="Label" type="Label" parent="."]
 margin_left = 884.0
 margin_right = 977.0
