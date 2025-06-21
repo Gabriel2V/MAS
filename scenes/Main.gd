@@ -2,7 +2,7 @@ extends Node
 
 export(int) var satellites_per_orbit = 50
 export(int) var orbit_count = 25
-export(float) var orbit_radius = 7000
+export(float) var orbit_radius = 70.00
 export(float) var orbit_inclination_deg = 53.0
 export(int) var walker_f = 1  # Phase factor (0 <= f < orbit_count)
 export(float, 0.1, 10.0) var simulation_speed := 1.0 # 1.0 = tempo normale
@@ -21,10 +21,10 @@ var fallen_count = 0
 var satellites = [] # ogni elemento: {id, orbit_id, theta, neighbors, last_heartbeat_times}
 export(float) var fault_probability = 0.001 # probabilità al secondo di fault
 
-const LAT_STEP = 10
-const LON_STEP = 10
-const EARTH_RADIUS = 6371.0
-const COVERAGE_RADIUS_KM = 1000.0
+const LAT_STEP = 100
+const LON_STEP = 100
+const EARTH_RADIUS = 63.710
+const COVERAGE_RADIUS_KM = 10.000
 var earth_grid = []  # griglia di celle con copertura
 
 

@@ -33,14 +33,6 @@ func _unhandled_input(event):
 			zoom_camera(zoom_speed)
 
 func zoom_camera(amount):
-	$Camera.size = clamp($Camera.size + amount, 1000, 30000)
+	#$Camera.size = clamp($Camera.size + amount, 1000, 30000)
+	$Camera.size += amount
 
-
-func _on_HSlider_value_changed(value):
-	$Camera.size = 100-value
-	
-
-func _on_VScrollBar_value_changed(value):
-	print("rotation: ",$Camera.translation)
-	$Camera.translate(Vector3(0,value-50*0.9,0))
-	rotate_x(value-50*-0.9)
