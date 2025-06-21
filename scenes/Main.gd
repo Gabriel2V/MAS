@@ -99,7 +99,7 @@ func _ready():
 			
 			id += 1
 	initialize_earth_grid()
-	#init_coverage_map()
+	init_coverage_map()
 	#setup_ui_layout()
 
 
@@ -253,11 +253,11 @@ func is_cell_covered(cell_lat: float, cell_lon: float, sat_pos: Vector3) -> bool
 
 func update_coverage():
 	# Verifica che coverage_image sia inizializzata
-	#if coverage_image == null:
-	#	print("ERRORE: coverage_image è null!")
-	#	return
-	#for cell in earth_grid:
-	#	cell.covered = false
+	if coverage_image == null:
+		print("ERRORE: coverage_image è null!")
+		return
+	for cell in earth_grid:
+		cell.covered = false
 
 	for s in satellites:
 		if not s.active:
@@ -274,16 +274,16 @@ func update_coverage():
 		if cell.covered:
 			cell.covered_count += 1
 	# Update image
-	#coverage_image.lock()
-	#for cell in earth_grid:
-	#	var x = int((cell.lon + 180) / LON_STEP)
-	#	var y = int((90 - cell.lat) / LAT_STEP)
-	#	var color = Color(0.1, 0.1, 0.1) # default: dark gray
-	#	if cell.covered:
-	#		color = Color(0.0, 1.0, 0.0) # green
-	#	coverage_image.set_pixel(x, y, color)
-	#coverage_image.unlock()
-	#coverage_texture.set_data(coverage_image)
+	coverage_image.lock()
+	for cell in earth_grid:
+		var x = int((cell.lon + 180) / LON_STEP)
+		var y = int((90 - cell.lat) / LAT_STEP)
+		var color = Color(0.1, 0.1, 0.1) # default: dark gray
+		if cell.covered:
+			color = Color(0.0, 1.0, 0.0) # green
+		coverage_image.set_pixel(x, y, color)
+	coverage_image.unlock()
+	coverage_texture.set_data(coverage_image)
 
 func estimate_coverage():
 	var covered_cells = 0
@@ -292,22 +292,22 @@ func estimate_coverage():
 			covered_cells += 1
 	var percent := float(covered_cells) / float(earth_grid.size()) * 100.0
 	# AGGIORNA UI
-	if has_node("Control/HBoxContainer/TextureProgress"):
-		var bar = get_node("Control/HBoxContainer/TextureProgress")
+	if has_node("Control/HBoxContainer/ProgressBar"):
+		var bar = get_node("Control/HBoxContainer/ProgressBar")
 		bar.value = percent
 	if has_node("Control/HBoxContainer/CoverageLabel"):
 		var lbl = get_node("Control/HBoxContainer/CoverageLabel")
 		lbl.text = "Copertura: %.2f%%" % percent
 		
-#func init_coverage_map():
-#	coverage_image = Image.new()
-#	coverage_image.create(map_width, map_height, false, Image.FORMAT_RGB8)
-#	coverage_texture = ImageTexture.new()
-#	coverage_texture.create_from_image(coverage_image)
+func init_coverage_map():
+	coverage_image = Image.new()
+	coverage_image.create(map_width, map_height, false, Image.FORMAT_RGB8)
+	coverage_texture = ImageTexture.new()
+	coverage_texture.create_from_image(coverage_image)
 
-#	$Control/CoverageMapPanel/CoverageMapTexture.texture = coverage_texture
+	$Control/CoverageMapPanel/CoverageMapTexture.texture = coverage_texture
 	# Verifica che il nodo esista prima di assegnare la texture
-	
+
 #func setup_ui_layout():
 #	# Posiziona il label dei satelliti in alto a destra
 #	if status_label:

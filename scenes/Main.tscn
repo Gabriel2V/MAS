@@ -1,4 +1,4 @@
-[gd_scene load_steps=8 format=2]
+[gd_scene load_steps=9 format=2]
 
 [ext_resource path="res://scripts/logic/Earth.gd" type="Script" id=1]
 [ext_resource path="res://assets/WorldMap16k.jpg" type="Texture" id=2]
@@ -14,10 +14,12 @@ material = SubResource( 5 )
 
 [sub_resource type="Skin" id=2]
 
+[sub_resource type="StyleBoxFlat" id=6]
+bg_color = Color( 0, 0.164706, 1, 1 )
+
 [node name="Main" type="Spatial"]
 script = ExtResource( 3 )
 satellites_per_orbit = 15
-orbit_count = 37
 
 [node name="MultiMeshInstance" type="MultiMeshInstance" parent="."]
 
@@ -52,23 +54,40 @@ margin_right = 137.0
 margin_bottom = 52.0
 
 [node name="HBoxContainer" type="HBoxContainer" parent="Control"]
-margin_right = 40.0
-margin_bottom = 40.0
+margin_top = 54.0
+margin_right = 223.0
+margin_bottom = 94.0
 
 [node name="CoverageLabel" type="Label" parent="Control/HBoxContainer"]
 margin_top = 13.0
+margin_right = 57.0
 margin_bottom = 27.0
+text = "coverage"
 
-[node name="TextureProgress" type="TextureProgress" parent="Control/HBoxContainer"]
-margin_left = 4.0
-margin_right = 5.0
-margin_bottom = 40.0
+[node name="ProgressBar" type="ProgressBar" parent="Control/HBoxContainer"]
+margin_left = 61.0
+margin_top = 13.0
+margin_right = 223.0
+margin_bottom = 27.0
+size_flags_horizontal = 3
+size_flags_vertical = 4
+custom_styles/fg = SubResource( 6 )
+step = 1.0
 
 [node name="CoverageMapPanel" type="Panel" parent="Control"]
+anchor_right = 3.516
+anchor_bottom = 0.099
+margin_left = 2.0
+margin_top = 90.0
+margin_right = 17.36
+margin_bottom = 229.04
 
 [node name="CoverageMapTexture" type="TextureRect" parent="Control/CoverageMapPanel"]
-margin_right = 40.0
-margin_bottom = 40.0
+anchor_right = 1.0
+anchor_bottom = 1.0
+margin_right = -1.0
+margin_bottom = -1.0
+expand = true
 
 [node name="Label" type="Label" parent="."]
 margin_left = 884.0
