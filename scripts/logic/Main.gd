@@ -21,10 +21,10 @@ var fallen_count = 0
 var satellites = [] # ogni elemento: {id, orbit_id, theta, neighbors, last_heartbeat_times}
 export(float) var fault_probability = 0.001 # probabilità al secondo di fault
 
-const LAT_STEP = 100
-const LON_STEP = 100
+const LAT_STEP = 25 #100
+const LON_STEP = 25 #100
 const EARTH_RADIUS = 63.710
-const COVERAGE_RADIUS_KM = 10.000
+const COVERAGE_RADIUS_KM = 10.0  
 var earth_grid = []  # griglia di celle con copertura
 
 var map_width := int(360 / LON_STEP)  # 36 per LON_STEP=10
@@ -286,18 +286,27 @@ func update_coverage():
 	coverage_texture.set_data(coverage_image)
 
 func estimate_coverage():
-	var covered_cells = 0
+	#var covered_cells = 0
+	var covered_weight := 0.0
+	var total_weight := 0.0
 	for cell in earth_grid:
+		var lat_rad = deg2rad(cell.lat)
+		var weight = cos(lat_rad)
+		if weight < 0.0:
+			weight = 0.0  # per sicurezza
+		total_weight += weight
 		if cell.covered:
-			covered_cells += 1
-	var percent := float(covered_cells) / float(earth_grid.size()) * 100.0
+			covered_weight += weight
+			#covered_cells += 1
+	var percent := (covered_weight / total_weight) * 100.0
+	#var percent := float(covered_cells) / float(earth_grid.size()) * 100.0
 	# AGGIORNA UI
 	if has_node("Control/HBoxContainer/ProgressBar"):
 		var bar = get_node("Control/HBoxContainer/ProgressBar")
 		bar.value = percent
 	if has_node("Control/HBoxContainer/CoverageLabel"):
 		var lbl = get_node("Control/HBoxContainer/CoverageLabel")
-		lbl.text = "Copertura: %.2f%%" % percent
+		lbl.text = "Copertura: "#%.2f%%" % percent
 		
 func init_coverage_map():
 	coverage_image = Image.new()
@@ -306,7 +315,11 @@ func init_coverage_map():
 	coverage_texture.create_from_image(coverage_image)
 
 	$Control/CoverageMapPanel/CoverageMapTexture.texture = coverage_texture
-	# Verifica che il nodo esista prima di assegnare la texture
+	
+func cell_weight(lat_deg: float) -> float:
+	var lat_rad = deg2rad(lat_deg)
+	return cos(lat_rad)  # Celle vicine ai poli valgono meno
+
 
 #func setup_ui_layout():
 #	# Posiziona il label dei satelliti in alto a destra

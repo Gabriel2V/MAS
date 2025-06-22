@@ -89,6 +89,7 @@ anchor_bottom = 1.0
 margin_right = -1.0
 margin_bottom = -1.0
 expand = true
+stretch_mode = 1
 
 [node name="Label" type="Label" parent="."]
 margin_left = 884.0
