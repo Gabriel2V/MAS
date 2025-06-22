@@ -16,6 +16,7 @@ var metrics_data = {
 export var enable_logging = true
 export var log_interval = 1.0  # secondi
 export var output_file = "simulation_data.json"
+export var data_folder = "data"  # Nome della cartella
 
 var log_timer = 0.0
 var simulation_start_time = 0.0
@@ -145,9 +146,21 @@ func analyze_orbital_distribution(main) -> Dictionary:
 	return distribution
 
 func export_data():
+	# Crea il percorso completo
+	var project_path = ProjectSettings.globalize_path("res://")
+	var data_path = project_path + data_folder + "/"
+	var full_path = data_path + output_file
+	
+	# Verifica che la cartella esista (opzionale, dato che già esiste)
+	var dir = Directory.new()
+	if not dir.dir_exists(data_path):
+		print("ATTENZIONE: Cartella data non trovata: ", data_path)
+		return
+		
+	# Apri il file per la scrittura
 	var file = File.new()
-	if file.open("user://simulation_data.json", File.WRITE) != OK:
-		print("Errore nell'aprire il file per la scrittura")
+	if file.open(full_path, File.WRITE) != OK:
+		print("Errore nell'aprire il file per la scrittura: ", full_path)
 		return
 	
 	# Aggiungi metadati
@@ -158,14 +171,35 @@ func export_data():
 			"orbit_count": get_node("/root/Main").orbit_count,
 			"satellites_per_orbit": get_node("/root/Main").satellites_per_orbit,
 			"fault_probability": get_node("/root/Main").fault_probability,
-			"export_timestamp": OS.get_datetime()
+			"export_timestamp": OS.get_datetime(),
+			"project_path": project_path
 		},
 		"metrics": metrics_data
 	}
 	
 	file.store_line(JSON.print(export_data))
 	file.close()
-	print("Dati esportati in: ", OS.get_user_data_dir(), "/simulation_data.json")
+	print("Dati esportati in: ", full_path)
+
+# Funzione aggiuntiva per esportare con timestamp nel nome file
+func export_data_with_timestamp():
+	var datetime = OS.get_datetime()
+	var timestamp = "%04d%02d%02d_%02d%02d%02d" % [
+		datetime.year, datetime.month, datetime.day,
+		datetime.hour, datetime.minute, datetime.second
+	]
+	
+	var original_filename = output_file
+	output_file = "simulation_data_%s.json" % timestamp
+	export_data()
+	output_file = original_filename  # Ripristina il nome originale
+
+# Funzione per esportare dati intermedi durante la simulazione
+func export_checkpoint(checkpoint_name: String = "checkpoint"):
+	var original_filename = output_file
+	output_file = "%s_%s.json" % [checkpoint_name, OS.get_ticks_msec()]
+	export_data()
+	output_file = original_filename
 
 func _exit_tree():
 	if enable_logging:
