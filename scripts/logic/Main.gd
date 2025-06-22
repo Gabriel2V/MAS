@@ -6,6 +6,7 @@ export(float) var orbit_radius = 70.00
 export(float) var orbit_inclination_deg = 53.0 # 53
 export(int) var walker_f = 1  # Phase factor (0 <= f < orbit_count)
 export(float, 0.1, 10.0) var simulation_speed := 1.0 # 1.0 = tempo normale
+export(int) var stats_refresh_cycles = 40
 
 
 onready var multi_mesh_instance := $MultiMeshInstance
@@ -17,6 +18,7 @@ var satellite_angles = []
 var angular_velocity = 2 * PI / satellites_per_orbit # rad/s
 var live_count = total_satellites
 var fallen_count = 0
+export(int) var cylces_count = 0
 
 var satellites = [] # ogni elemento: {id, orbit_id, theta, neighbors, last_heartbeat_times}
 export(float) var fault_probability = 0.001 # probabilità al secondo di fault
@@ -172,10 +174,14 @@ func _process(delta):
 			# Aggiorna angolo
 			satellites[id].theta = theta
 			id += 1
-
+	
+	cylces_count += 1
+	
 	update_heartbeats(delta)
-	update_coverage()
-	estimate_coverage()
+	if true: #cylces_count == stats_refresh_cycles:
+		update_coverage()
+		estimate_coverage()
+		cylces_count = 0
 
 	status_label.text = "Live satellites: %d \n Dead satellites: %d" % [live_count, fallen_count]
 	
@@ -281,6 +287,8 @@ func update_coverage():
 		var color = Color(0.1, 0.1, 0.1) # default: dark gray
 		if cell.covered:
 			color = Color(0.0, 1.0, 0.0) # green
+		x = clamp(x, 0, coverage_image.get_width() - 1)
+		y = clamp(y, 0, coverage_image.get_height() - 1)
 		coverage_image.set_pixel(x, y, color)
 	coverage_image.unlock()
 	coverage_texture.set_data(coverage_image)
