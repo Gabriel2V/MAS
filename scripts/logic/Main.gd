@@ -1,52 +1,60 @@
 extends Node
 
-export(int) var satellites_per_orbit = 20 #50
-export(int) var orbit_count = 36 #25
-export(float) var orbit_radius = 70.00
-export(float) var orbit_inclination_deg = 53.0 # 53
-export(int) var walker_f = 1  # Phase factor (0 <= f < orbit_count)
+export(int) var satellites_per_orbit = 24 # numero di satelliti per orbita
+export(int) var orbit_count = 36 # numero di orbite
+export(float) var orbit_radius = 70.00 # raggio orbite (scalato)
+export(float) var orbit_inclination_deg = 53.0 # inclinazione in gradi dell'orbita
+export(int) var walker_f = 12  # Phase factor (0 <= f < orbit_count)
 export(float, 0.1, 10.0) var simulation_speed := 1.0 # 1.0 = tempo normale
-export(int) var stats_refresh_cycles = 40
+export(int) var stats_refresh_cycles = 40 
 
+# Parametri riposizionamento
+export(float) var repositioning_speed_multiplier = 2.0 # Moltiplicatore velocità durante riposizionamento
+
+const EARTH_MASS = 5.972e24  # kg
+const G = 6.674e-11  # m3/kg·s2
 
 onready var multi_mesh_instance := $MultiMeshInstance
 onready var option_btn := $Control/SpeedButton
 onready var status_label = $Label 
 
+
 var total_satellites = satellites_per_orbit * orbit_count
 var satellite_angles = []
-var angular_velocity = 2 * PI / satellites_per_orbit # rad/s
 var live_count = total_satellites
 var fallen_count = 0
 export(int) var cylces_count = 0
+var simulation_time = 0.0 # Tempo simulato in secondi
 
-var satellites = [] # ogni elemento: {id, orbit_id, theta, neighbors, last_heartbeat_times}
-export(float) var fault_probability = 0.001 # probabilità al secondo di fault
+var satellites = [] # ogni elemento: {id, orbit_id, theta, neighbors, last_heartbeat_times, repositioning, target_theta}
+export(float) var fault_probability = 0.00001#0.001 # probabilità al secondo di fault
 
-const LAT_STEP = 25 #100
-const LON_STEP = 25 #100
+const LAT_STEP = 25
+const LON_STEP = 25 
 const EARTH_RADIUS = 63.710
 const COVERAGE_RADIUS_KM = 10.0  
 var earth_grid = []  # griglia di celle con copertura
 
 var map_width := int(360 / LON_STEP)  # 36 per LON_STEP=10
 var map_height := int(180 / LAT_STEP)  # 18 per LAT_STEP=10
-#var map_width := 180 # 180° longitudine / passo
-#var map_height := 90 # 90° latitudine / passo
 var coverage_image : Image
 var coverage_texture : ImageTexture
 
-
-
+const BLINK_SPEED = 5.0  # Velocità del lampeggio
+const FAILING_COLOR = Color(1.0, 0.0, 0.0)  # Rosso per falling
+const REPOSITIONING_COLOR = Color(1.0, 1.0, 0.0)  # Giallo per repositioning
+const NORMAL_COLOR = Color(0.0, 1.0, 0.0)  # Verde per normale
+const INACTIVE_COLOR = Color(0.5, 0.5, 0.5)  # Grigio per inattivo
 
 func _ready():
 	option_btn = get_node_or_null("Control/SpeedButton")
 	option_btn.clear()
 	option_btn.add_item("Stop", 0)
-	option_btn.add_item("0.5x", 1)
-	option_btn.add_item("1x", 2)
-	option_btn.add_item("2x", 3)
-	option_btn.select(2)
+	option_btn.add_item("1x", 1)
+	option_btn.add_item("2x", 2)
+	option_btn.add_item("10x", 3)
+	option_btn.add_item("100x", 4)
+	option_btn.select(1)
 	
 	multi_mesh_instance = get_node_or_null("MultiMeshInstance")
 	if not multi_mesh_instance:
@@ -55,7 +63,6 @@ func _ready():
 	print("MultiMeshInstance: ", multi_mesh_instance)
 
 	var mesh = preload("res://scenes/Satellite.tres")
-
 	var mm = MultiMesh.new()
 	mm.mesh = mesh
 	mm.transform_format = MultiMesh.TRANSFORM_3D
@@ -66,6 +73,7 @@ func _ready():
 	
 	satellites.clear()
 	satellite_angles.clear()
+	var realistic_angular_velocity = calculate_scaled_angular_velocity()
 	
 	var id = 0
 	for orbit in range(orbit_count):
@@ -81,7 +89,6 @@ func _ready():
 
 			satellite_angles.append(theta)
 			
-			
 		# Neighbors: previous and next in orbit (circular)
 			var prev = (sat - 1 + satellites_per_orbit) % satellites_per_orbit + orbit * satellites_per_orbit
 			var next = (sat + 1) % satellites_per_orbit + orbit * satellites_per_orbit
@@ -94,15 +101,26 @@ func _ready():
 				"last_heartbeat": {prev: 0.0, next: 0.0},
 				"heartbeat_timer": 0.0,
 				"active": true,
-				"angular_velocity": angular_velocity,
+				"angular_velocity": realistic_angular_velocity, #angular_velocity,
 				"falling": false,
-				"fall_timer": 0.0
+				"fall_timer": 0.0,
+				"repositioning": false,
+				"target_theta": 0.0,
+				"original_angular_velocity": realistic_angular_velocity
 			})
 			
 			id += 1
 	initialize_earth_grid()
 	init_coverage_map()
-	#setup_ui_layout()
+	
+
+func calculate_scaled_angular_velocity() -> float:
+	var orbit_radius_real_m = orbit_radius * 1000.0 * 100.0 # SCALE_FACTOR 
+	# Calcola velocità orbitale reale 
+	var velocity_real_ms = sqrt(G * EARTH_MASS / orbit_radius_real_m)  # m/s
+	# Calcola velocità angolare reale
+	var angular_vel_real = velocity_real_ms / orbit_radius_real_m  # rad/s
+	return angular_vel_real
 
 
 func orbital_position(radius: float, inclination_deg: float, RAAN: float, anomaly: float) -> Vector3:
@@ -111,70 +129,219 @@ func orbital_position(radius: float, inclination_deg: float, RAAN: float, anomal
 	var z = radius * sin(anomaly)
 	var y = 0.0
 	var pos = Vector3(x, y, z)
-
 	pos = pos.rotated(Vector3(1, 0, 0), inclination)
 	pos = pos.rotated(Vector3(0, 1, 0), RAAN)
-
 	return pos
 
+func calculate_optimal_positions(orbit_id: int) -> Array:
+	"""Calcola le posizioni ottimali per i satelliti attivi nell'orbita"""
+	var active_satellites = []
+	for sat in satellites:
+		if sat.orbit_id == orbit_id and sat.active and not sat.falling:
+			active_satellites.append(sat)
+	
+	if active_satellites.size() == 0:
+		return []
+	
+	var optimal_positions = []
+	var angular_spacing = 2 * PI / active_satellites.size()
+	
+	# Trova il satellite con l'angolo più piccolo come riferimento
+	var min_angle = active_satellites[0].theta
+	for sat in active_satellites:
+		if sat.theta < min_angle:
+			min_angle = sat.theta
+	
+	# Calcola posizioni ottimali a partire dal riferimento
+	for i in range(active_satellites.size()):
+		var optimal_theta = min_angle + i * angular_spacing
+		# Normalizza l'angolo tra 0 e 2π
+		while optimal_theta >= 2 * PI:
+			optimal_theta -= 2 * PI
+		while optimal_theta < 0:
+			optimal_theta += 2 * PI
+		optimal_positions.append(optimal_theta)
+	
+	return optimal_positions
+
+func start_repositioning(orbit_id: int):
+	"""Avvia il riposizionamento dei satelliti in un'orbita"""
+	var active_satellites = []
+	for sat in satellites:
+		if sat.orbit_id == orbit_id and sat.active and not sat.falling:
+			active_satellites.append(sat)
+	
+	if active_satellites.size() <= 1:
+		return  # Non serve riposizionare se c'è solo un satellite o nessuno
+	
+	var optimal_positions = calculate_optimal_positions(orbit_id)
+	
+	# Assegna ogni satellite alla posizione ottimale più vicina
+	var assigned_positions = []
+	for sat in active_satellites:
+		var best_target = -1
+		var min_distance = INF
+		
+		for i in range(optimal_positions.size()):
+			if i in assigned_positions:
+				continue
+			
+			var target_theta = optimal_positions[i]
+			var distance = angle_distance(sat.theta, target_theta)
+			
+			if distance < min_distance:
+				min_distance = distance
+				best_target = i
+		
+		if best_target != -1:
+			assigned_positions.append(best_target)
+			sat.target_theta = optimal_positions[best_target]
+			sat.repositioning = true
+			#print("Satellite ", sat.id, " inizia riposizionamento verso posizione ", rad2deg(sat.target_theta))
+
+func angle_distance(angle1: float, angle2: float) -> float:
+	"""Calcola la distanza angolare più breve tra due angoli"""
+	var diff = abs(angle2 - angle1)
+	if diff > PI:
+		diff = 2 * PI - diff
+	return diff
+
+func update_repositioning(satellite: Dictionary, delta: float):
+	"""Aggiorna il riposizionamento di un satellite"""
+	if not satellite.repositioning :
+		return
+	
+	var target_theta = satellite.target_theta
+	var current_theta = satellite.theta
+	
+	# Calcola la direzione più breve per raggiungere il target
+	var diff = target_theta - current_theta
+	if diff > PI:
+		diff -= 2 * PI
+	elif diff < -PI:
+		diff += 2 * PI
+	
+	# Se siamo vicini al target, ferma il riposizionamento
+	if abs(diff) < 0.01:  # Tolleranza di ~0.6 gradi
+		satellite.repositioning = false
+		satellite.angular_velocity = satellite.original_angular_velocity
+		#print("Satellite ", satellite.id, " ha completato il riposizionamento")
+		return
+	
+	
+	# Applica velocità aumentata nella direzione corretta
+	var direction = sign(diff)
+	var base_velocity = satellite.original_angular_velocity
+	satellite.angular_velocity = base_velocity * repositioning_speed_multiplier * direction
 
 func _process(delta):
-	
+	simulation_time += delta * simulation_speed 
 	delta *= simulation_speed
 	var id = 0
+	var orbits_affected = []  # Traccia le orbite che hanno perso satelliti
+	
+	# Calcola il fattore di lampeggio basato sul tempo
+	var blink_factor = abs(sin(simulation_time * BLINK_SPEED))
+	
 	for orbit in range(orbit_count):
 		var RAAN = deg2rad(orbit * 360.0 / orbit_count)
 		for sat in range(satellites_per_orbit):
-			#satellite_angles[id] += angular_velocity * delta			
 			if satellites[id].active and randf() < fault_probability * delta: 
 				#satellites[id].active = false
 				satellites[id].falling = true
 				satellites[id].fall_timer = 0.0
-				print("Satellite ", id, " FAILED")
+				#print("Satellite ", id, " FAILED")
 				fallen_count += 1
 				live_count -= 1
-			
+				if not (satellites[id].orbit_id in orbits_affected):
+					orbits_affected.append(satellites[id].orbit_id)
+			# Aggiorna riposizionamento
+			if satellites[id].repositioning:
+				update_repositioning(satellites[id], delta)
 			# Update angolo solo se attivo
 			if satellites[id].active or satellites[id].falling:
 				satellite_angles[id] += satellites[id].angular_velocity * delta
-			
 			var theta = satellite_angles[id]
 			var pos = orbital_position(orbit_radius, orbit_inclination_deg, RAAN, theta)
 			
-			# Se sta cadendo, scende
+			# Se sta cadendo, scende verso la Terra
 			if satellites[id].falling:
 				satellites[id].fall_timer += delta
-				var descent = satellites[id].fall_timer * 2.0
-				pos.y -= descent
-
-			# Dopo 5s, disattiva del tutto e nascondi
-			if satellites[id].fall_timer >= 5.0:
-				var transform = multi_mesh_instance.multimesh.get_instance_transform(id)
-				transform.basis = Basis().scaled(Vector3(0, 0, 0))
-				multi_mesh_instance.multimesh.set_instance_transform(id, transform)
-				satellites[id].active = false
-				satellites[id].falling = false
-				id += 1
-				continue
-
+				
+				# Calcola la direzione verso il centro della Terra
+				var direction_to_center = -pos.normalized()
+				
+				# Aggiungi un po' di casualità per un effetto più realistico
+				var randomness = Vector3(
+					rand_range(-0.1, 0.1),
+					rand_range(-0.1, 0.1),
+					rand_range(-0.1, 0.1))
+				
+				# Muovi il satellite verso il centro con accelerazione
+				var fall_speed = satellites[id].fall_timer * 2.0  # Aumenta la velocità col tempo
+				pos += direction_to_center * fall_speed * delta + randomness * delta
 			# Aggiorna posizione
 			var transform = Transform().translated(pos)
 			transform.basis = Basis().scaled(Vector3.ONE * 0.3)
 			multi_mesh_instance.multimesh.set_instance_transform(id, transform)
-
-			# Colore in base allo stato
-			var color = Color(0, 1, 0)  # verde
+			
+			# Colore in base allo stato con effetto lampeggiante
+			var color = NORMAL_COLOR  # verde - normale
+			
 			if satellites[id].falling:
-				color = Color(1.0, 0.5, 0.0)  # arancione
+				# Rosso lampeggiante per satelliti in caduta
+				color = FAILING_COLOR.linear_interpolate(Color(0.5, 0, 0), blink_factor)
+			elif satellites[id].repositioning:
+				# Giallo lampeggiante per satelliti in riposizionamento
+				color = REPOSITIONING_COLOR.linear_interpolate(Color(0.5, 0.5, 0), blink_factor)
 			elif not satellites[id].active:
-				color = Color(1.0, 0.0, 0.0)  # rosso
-
+				color = INACTIVE_COLOR  # grigio - inattivo
+			
 			multi_mesh_instance.multimesh.set_instance_custom_data(id, color)
-
+			
 			# Aggiorna angolo
 			satellites[id].theta = theta
 			id += 1
-	
+#			# Dopo 5s, disattiva del tutto e nascondi
+#			if satellites[id].fall_timer >= 5.0:
+#				var transform = multi_mesh_instance.multimesh.get_instance_transform(id)
+#				transform.basis = Basis().scaled(Vector3(0, 0, 0))
+#				multi_mesh_instance.multimesh.set_instance_transform(id, transform)
+#				satellites[id].active = false
+#				satellites[id].falling = false
+#				id += 1
+#				continue
+#
+#			# Dopo 5s, disattiva del tutto e nascondi
+#			if satellites[id].fall_timer >= 5.0:
+#				var transform = multi_mesh_instance.multimesh.get_instance_transform(id)
+#				transform.basis = Basis().scaled(Vector3(0, 0, 0))
+#				multi_mesh_instance.multimesh.set_instance_transform(id, transform)
+#				satellites[id].active = false
+#				satellites[id].falling = false
+#				id += 1
+#				continue
+#			# Aggiorna posizione
+#			var transform = Transform().translated(pos)
+#			transform.basis = Basis().scaled(Vector3.ONE * 0.3)
+#			multi_mesh_instance.multimesh.set_instance_transform(id, transform)
+#
+#			# Colore in base allo stato
+#			var color = Color(0, 1, 0)  # verde - normale
+#			if satellites[id].repositioning:
+#				color = Color(0, 0, 1)  # blu - riposizionamento
+#			elif satellites[id].falling:
+#				color = Color(1.0, 0.5, 0.0)  # arancione - caduta
+#			elif not satellites[id].active:
+#				color = Color(1.0, 0.0, 0.0)  # rosso - inattivo
+#			multi_mesh_instance.multimesh.set_instance_custom_data(id, color)
+#			# Aggiorna angolo
+#			satellites[id].theta = theta
+#			id += 1
+			
+	# Avvia riposizionamento per le orbite affette
+	for orbit_id in orbits_affected:
+		start_repositioning(orbit_id)
 	cylces_count += 1
 	
 	update_heartbeats(delta)
@@ -182,15 +349,31 @@ func _process(delta):
 		update_coverage()
 		estimate_coverage()
 		cylces_count = 0
-
-	status_label.text = "Live satellites: %d \n Dead satellites: %d" % [live_count, fallen_count]
 	
+	# Aggiorna statistiche
+	var repositioning_count = 0
+
+	for sat in satellites:
+		if sat.active:
+			if sat.repositioning:
+				repositioning_count += 1
+		
+	var time_string = format_simulation_time(simulation_time)
+	status_label.text = "Live satellites: %d\nDead satellites: %d\nRepositioning: %d\nSim Time: %s\n" % [live_count, fallen_count, repositioning_count, time_string]
+
+
+func format_simulation_time(total_seconds: float) -> String:
+	"""Formatta il tempo simulato in ore:minuti:secondi"""
+	var hours = int(total_seconds) / 3600
+	var minutes = (int(total_seconds) % 3600) / 60
+	var seconds = int(total_seconds) % 60
+	return "%02d:%02d:%02d" % [hours, minutes, seconds]
+
 func update_heartbeats(delta):
 	for sat in satellites:
 		sat.heartbeat_timer += delta
 		for neighbor_id in sat.neighbors:
 			sat.last_heartbeat[neighbor_id] += delta
-
 		# Invia heartbeat ogni 1 secondo
 		if sat.heartbeat_timer >= 1.0:
 			for neighbor_id in sat.neighbors:
@@ -199,17 +382,16 @@ func update_heartbeats(delta):
 				neighbor.last_heartbeat[sat.id] = 0.0
 				#print("Satellite ", sat.id, " sends heartbeat to ", neighbor_id)
 			sat.heartbeat_timer = 0.0
-
 		# Controlla se un vicino è considerato morto
 		for neighbor_id in sat.neighbors:
 			if sat.last_heartbeat[neighbor_id] > 3.0: # fault timeout
 					if satellites[neighbor_id].active:
 						print("⚠ Satellite ", sat.id, " detects fault in neighbor ", neighbor_id)
 						satellites[neighbor_id].active = false
-						update_angular_velocities()
-
+						#update_angular_velocities()
 
 func update_angular_velocities():
+	var realistic_angular_velocity = calculate_scaled_angular_velocity()
 	for orbit in range(orbit_count):
 		var sats_in_orbit = []
 		for s in satellites:
@@ -218,7 +400,7 @@ func update_angular_velocities():
 		var count = sats_in_orbit.size()
 		if count == 0:
 			continue
-		var new_velocity = 2 * PI / count
+		var new_velocity = ( realistic_angular_velocity * count) / satellites_per_orbit #2 * PI / count
 		for s in sats_in_orbit:
 			s.angular_velocity = new_velocity
 			
@@ -228,11 +410,13 @@ func _on_SpeedButton_item_selected(index):
 		0:
 			simulation_speed = 0
 		1:
-			simulation_speed = 0.5
-		2:
 			simulation_speed = 1
-		3:
+		2:
 			simulation_speed = 2
+		3:
+			simulation_speed = 10
+		4: 
+			simulation_speed = 100
 
 func initialize_earth_grid():
 	earth_grid.clear()
@@ -274,7 +458,6 @@ func update_coverage():
 		for cell in earth_grid:
 			if is_cell_covered(cell.lat, cell.lon, pos):
 				cell.covered = true
-	
 	# Aggiorna conteggio per media
 	for cell in earth_grid:
 		if cell.covered:
@@ -292,6 +475,7 @@ func update_coverage():
 		coverage_image.set_pixel(x, y, color)
 	coverage_image.unlock()
 	coverage_texture.set_data(coverage_image)
+
 
 func estimate_coverage():
 	#var covered_cells = 0
@@ -314,8 +498,8 @@ func estimate_coverage():
 		bar.value = percent
 	if has_node("Control/HBoxContainer/CoverageLabel"):
 		var lbl = get_node("Control/HBoxContainer/CoverageLabel")
-		lbl.text = "Copertura: "#%.2f%%" % percent
-		
+		lbl.text = "Copertura: "#%.2f%%" % percent		
+
 func init_coverage_map():
 	coverage_image = Image.new()
 	coverage_image.create(map_width, map_height, false, Image.FORMAT_RGB8)
@@ -323,68 +507,7 @@ func init_coverage_map():
 	coverage_texture.create_from_image(coverage_image)
 
 	$Control/CoverageMapPanel/CoverageMapTexture.texture = coverage_texture
-	
+
 func cell_weight(lat_deg: float) -> float:
 	var lat_rad = deg2rad(lat_deg)
 	return cos(lat_rad)  # Celle vicine ai poli valgono meno
-
-
-#func setup_ui_layout():
-#	# Posiziona il label dei satelliti in alto a destra
-#	if status_label:
-#		status_label.anchor_left = 1.0
-#		status_label.anchor_right = 1.0
-#		status_label.anchor_top = 0.0
-#		status_label.anchor_bottom = 0.0
-#		status_label.margin_left = -200
-#		status_label.margin_right = -10
-#		status_label.margin_top = 10
-#		status_label.margin_bottom = 60
-#
-#	# Posiziona il bottone velocità in alto a sinistra
-#	if option_btn:
-#		option_btn.anchor_left = 0.0
-#		option_btn.anchor_right = 0.0
-#		option_btn.anchor_top = 0.0
-#		option_btn.anchor_bottom = 0.0
-#		option_btn.margin_left = 10
-#		option_btn.margin_right = 120
-#		option_btn.margin_top = 10
-#		option_btn.margin_bottom = 40
-#
-#	# Posiziona la barra di copertura in alto al centro
-#	if has_node("Control/HBoxContainer"):
-#		var hbox = $Control/HBoxContainer
-#		hbox.anchor_left = 0.5
-#		hbox.anchor_right = 0.5
-#		hbox.anchor_top = 0.0
-#		hbox.anchor_bottom = 0.0
-#		hbox.margin_left = -150
-#		hbox.margin_right = 150
-#		hbox.margin_top = 10
-#		hbox.margin_bottom = 40
-#
-#	# Posiziona il panel della mappa in basso a destra
-#	if has_node("Control/CoverageMapPanel"):
-#		var panel = $Control/CoverageMapPanel
-#		panel.anchor_left = 1.0
-#		panel.anchor_right = 1.0
-#		panel.anchor_top = 1.0
-#		panel.anchor_bottom = 1.0
-#		panel.margin_left = -220
-#		panel.margin_right = -10
-#		panel.margin_top = -120
-#		panel.margin_bottom = -10
-#
-#		# Imposta dimensioni del TextureRect dentro il panel
-#		if has_node("Control/CoverageMapPanel/CoverageMapTexture"):
-#			var texture_rect = $Control/CoverageMapPanel/CoverageMapTexture
-#			texture_rect.anchor_left = 0.0
-#			texture_rect.anchor_right = 1.0
-#			texture_rect.anchor_top = 0.0
-#			texture_rect.anchor_bottom = 1.0
-#			texture_rect.margin_left = 5
-#			texture_rect.margin_right = -5
-#			texture_rect.margin_top = 5
-#			texture_rect.margin_bottom = -5
-#
