@@ -24,6 +24,7 @@ onready var live_count = total_satellites
 var fallen_count = 0
 var cylces_count = 0
 var simulation_time = 0.0 # Tempo simulato in secondi
+var removed_count = 0
 
 var satellites = [] # ogni elemento: {id, orbit_id, theta, neighbors, last_heartbeat_times, repositioning, target_theta}
 export(float) var fault_probability = 0.00001#0.001 # probabilità al secondo di fault
@@ -105,10 +106,15 @@ func _ready():
 				"fall_timer": 0.0,
 				"repositioning": false,
 				"target_theta": 0.0,
-				"original_angular_velocity": realistic_angular_velocity
+				"original_angular_velocity": realistic_angular_velocity,
+				"removed": false
 			})
 			
 			id += 1
+	live_count = 0
+	for sat in satellites:
+		if sat.active and not sat.falling:
+			live_count += 1
 	initialize_earth_grid()
 	init_coverage_map()
 	
@@ -136,7 +142,7 @@ func calculate_optimal_positions(orbit_id: int) -> Array:
 	"""Calcola le posizioni ottimali per i satelliti attivi nell'orbita"""
 	var active_satellites = []
 	for sat in satellites:
-		if sat.orbit_id == orbit_id and sat.active and not sat.falling:
+		if sat.orbit_id == orbit_id and sat.active and not sat.falling and not sat.removed:
 			active_satellites.append(sat)
 	
 	if active_satellites.size() == 0:
@@ -167,7 +173,7 @@ func start_repositioning(orbit_id: int):
 	"""Avvia il riposizionamento dei satelliti in un'orbita"""
 	var active_satellites = []
 	for sat in satellites:
-		if sat.orbit_id == orbit_id and sat.active and not sat.falling:
+		if sat.orbit_id == orbit_id and sat.active and not sat.falling and not sat.removed:
 			active_satellites.append(sat)
 	
 	if active_satellites.size() <= 1:
@@ -245,8 +251,13 @@ func _process(delta):
 	for orbit in range(orbit_count):
 		var RAAN = deg2rad(orbit * 360.0 / orbit_count)
 		for sat in range(satellites_per_orbit):
-			if satellites[id].active and randf() < fault_probability * delta: 
-				#satellites[id].active = false
+			# Skip completamente i satelliti già rimossi
+			if satellites[id].removed:
+				id += 1
+				continue
+				
+			if satellites[id].active and not satellites[id].falling and randf() < fault_probability * delta: 
+				satellites[id].active = false
 				satellites[id].falling = true
 				satellites[id].fall_timer = 0.0
 				#print("Satellite ", id, " FAILED")
@@ -255,7 +266,7 @@ func _process(delta):
 				if not (satellites[id].orbit_id in orbits_affected):
 					orbits_affected.append(satellites[id].orbit_id)
 			# Aggiorna riposizionamento
-			if satellites[id].repositioning:
+			if satellites[id].repositioning and satellites[id].active:
 				update_repositioning(satellites[id], delta)
 			# Update angolo solo se attivo
 			if satellites[id].active or satellites[id].falling:
@@ -266,17 +277,28 @@ func _process(delta):
 			# Se sta cadendo, scende verso la Terra
 			if satellites[id].falling:
 				satellites[id].fall_timer += delta
+				# Dopo 5 secondi, nascondi completamente il satellite
+				if satellites[id].fall_timer >= 5.0:
+					var transform = Transform()
+					transform.basis = Basis().scaled(Vector3.ZERO)  # Scala a zero per nascondere
+					multi_mesh_instance.multimesh.set_instance_transform(id, transform)
+					satellites[id].falling = false
+					satellites[id].active = false
+					satellites[id].removed = true 
+					removed_count += 1
+					fallen_count -= 1
+					id += 1
+					continue
 				
 				# Calcola la direzione verso il centro della Terra
 				var direction_to_center = -pos.normalized()
-				
-				# Aggiungi un po' di casualità per un effetto più realistico
+				# Aggiunge un po' di casualità per un effetto più realistico
 				var randomness = Vector3(
 					rand_range(-0.1, 0.1),
 					rand_range(-0.1, 0.1),
 					rand_range(-0.1, 0.1))
 				
-				# Muovi il satellite verso il centro con accelerazione
+				# Muove il satellite verso il centro con accelerazione
 				var fall_speed = satellites[id].fall_timer * 2.0  # Aumenta la velocità col tempo
 				pos += direction_to_center * fall_speed * delta + randomness * delta
 			# Aggiorna posizione
@@ -286,62 +308,34 @@ func _process(delta):
 			
 			# Colore in base allo stato con effetto lampeggiante
 			var color = NORMAL_COLOR  # verde - normale
-			
-			if satellites[id].falling:
+			if satellites[id].removed:
+			# Non impostare colore per satelliti rimossi (rimangono invisibili)
+				pass
+			elif satellites[id].active and not satellites[id].falling and not satellites[id].repositioning:
+				multi_mesh_instance.multimesh.set_instance_custom_data(id, color)
+			elif satellites[id].falling:
 				# Rosso lampeggiante per satelliti in caduta
 				color = FAILING_COLOR.linear_interpolate(Color(0.5, 0, 0), blink_factor)
+				multi_mesh_instance.multimesh.set_instance_custom_data(id, color)
 			elif satellites[id].repositioning:
 				# Giallo lampeggiante per satelliti in riposizionamento
 				color = REPOSITIONING_COLOR.linear_interpolate(Color(0.5, 0.5, 0), blink_factor)
-			elif not satellites[id].active:
-				color = INACTIVE_COLOR  # grigio - inattivo
-			
-			multi_mesh_instance.multimesh.set_instance_custom_data(id, color)
-			
+				multi_mesh_instance.multimesh.set_instance_custom_data(id, color)
 			# Aggiorna angolo
 			satellites[id].theta = theta
 			id += 1
-#			# Dopo 5s, disattiva del tutto e nascondi
-#			if satellites[id].fall_timer >= 5.0:
-#				var transform = multi_mesh_instance.multimesh.get_instance_transform(id)
-#				transform.basis = Basis().scaled(Vector3(0, 0, 0))
-#				multi_mesh_instance.multimesh.set_instance_transform(id, transform)
-#				satellites[id].active = false
-#				satellites[id].falling = false
-#				id += 1
-#				continue
-#
-#			# Dopo 5s, disattiva del tutto e nascondi
-#			if satellites[id].fall_timer >= 5.0:
-#				var transform = multi_mesh_instance.multimesh.get_instance_transform(id)
-#				transform.basis = Basis().scaled(Vector3(0, 0, 0))
-#				multi_mesh_instance.multimesh.set_instance_transform(id, transform)
-#				satellites[id].active = false
-#				satellites[id].falling = false
-#				id += 1
-#				continue
-#			# Aggiorna posizione
-#			var transform = Transform().translated(pos)
-#			transform.basis = Basis().scaled(Vector3.ONE * 0.3)
-#			multi_mesh_instance.multimesh.set_instance_transform(id, transform)
-#
-#			# Colore in base allo stato
-#			var color = Color(0, 1, 0)  # verde - normale
-#			if satellites[id].repositioning:
-#				color = Color(0, 0, 1)  # blu - riposizionamento
-#			elif satellites[id].falling:
-#				color = Color(1.0, 0.5, 0.0)  # arancione - caduta
-#			elif not satellites[id].active:
-#				color = Color(1.0, 0.0, 0.0)  # rosso - inattivo
-#			multi_mesh_instance.multimesh.set_instance_custom_data(id, color)
-#			# Aggiorna angolo
-#			satellites[id].theta = theta
-#			id += 1
-			
 	# Avvia riposizionamento per le orbite affette
 	for orbit_id in orbits_affected:
 		start_repositioning(orbit_id)
 	cylces_count += 1
+	
+	var all_dead = true
+	for sat in satellites:
+		if sat.active and not sat.falling:
+			all_dead = false
+			break
+	if all_dead:
+		simulation_speed = 0.0  # Ferma la simulazione
 	
 	update_heartbeats(delta)
 	if cylces_count == stats_refresh_cycles:
@@ -359,8 +353,10 @@ func _process(delta):
 				repositioning_count += 1
 		
 	var time_string = format_simulation_time(simulation_time)
-	status_label.text = "Live satellites: %d\nDead satellites: %d\nRepositioning: %d\nSim Time: %s\n" % [live_count, fallen_count, repositioning_count, time_string]
-
+	var status_text = "Live satellites: %d\nRepositioning: %d\nFalling: %d\nBurned: %d\nSim Time: %s\n" % [live_count, repositioning_count, fallen_count, removed_count, time_string]
+	if all_dead:
+		status_text += "\n⚠ ALL SATELLITES DEAD ⚠"
+	status_label.text = status_text
 
 func format_simulation_time(total_seconds: float) -> String:
 	"""Formatta il tempo simulato in ore:minuti:secondi"""
@@ -391,10 +387,12 @@ func update_heartbeats(delta):
 		# Controlla se un vicino è considerato morto
 		for neighbor_id in sat.neighbors:
 			if sat.last_heartbeat[neighbor_id] > 3.0: # fault timeout
-					if satellites[neighbor_id].active:
+					if satellites[neighbor_id].active and not satellites[neighbor_id].falling:
 						print("⚠ Satellite ", sat.id, " detects fault in neighbor ", neighbor_id)
 						satellites[neighbor_id].active = false
-						#update_angular_velocities()
+						satellites[neighbor_id].falling = true
+						fallen_count += 1
+						live_count -= 1
 
 func update_angular_velocities():
 	var realistic_angular_velocity = calculate_scaled_angular_velocity()
@@ -456,7 +454,7 @@ func update_coverage():
 		cell.covered = false
 
 	for s in satellites:
-		if not s.active:
+		if not s.active or s.falling or s.removed:
 			continue
 		var RAAN = deg2rad(s.orbit_id * 360.0 / orbit_count)
 		var pos = orbital_position(orbit_radius, orbit_inclination_deg, RAAN, s.theta)
