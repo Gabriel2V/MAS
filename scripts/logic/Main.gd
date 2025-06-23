@@ -5,8 +5,8 @@ export(int) var orbit_count = 36 # numero di orbite
 export(float) var orbit_radius = 70.00 # raggio orbite (scalato)
 export(float) var orbit_inclination_deg = 53.0 # inclinazione in gradi dell'orbita
 export(int) var walker_f = 12  # Phase factor (0 <= f < orbit_count)
-export(float, 0.1, 10.0) var simulation_speed := 1.0 # 1.0 = tempo normale
-export(int) var stats_refresh_cycles = 40 
+export(float, 0.1, 100.0) var simulation_speed := 1.0 # 1.0 = tempo normale
+export(int) var stats_refresh_cycles = 50 
 
 # Parametri riposizionamento
 export(float) var repositioning_speed_multiplier = 2.0 # Moltiplicatore velocità durante riposizionamento
@@ -345,7 +345,8 @@ func _process(delta):
 	cylces_count += 1
 	
 	update_heartbeats(delta)
-	if true: #cylces_count == stats_refresh_cycles:
+	if cylces_count == stats_refresh_cycles:
+		#print("refreshing coverage",simulation_time)
 		update_coverage()
 		estimate_coverage()
 		cylces_count = 0
@@ -375,7 +376,7 @@ func update_heartbeats(delta):
 		for neighbor_id in sat.neighbors:
 			sat.last_heartbeat[neighbor_id] += delta
 		# Invia heartbeat ogni 1 secondo
-		if sat.heartbeat_timer >= 1.0:
+		if sat.heartbeat_timer >= 1.0 * simulation_speed:
 			for neighbor_id in sat.neighbors:
 				# Simula ricezione dal satellite verso il vicino
 				var neighbor = satellites[neighbor_id]
@@ -384,7 +385,7 @@ func update_heartbeats(delta):
 			sat.heartbeat_timer = 0.0
 		# Controlla se un vicino è considerato morto
 		for neighbor_id in sat.neighbors:
-			if sat.last_heartbeat[neighbor_id] > 3.0: # fault timeout
+			if sat.last_heartbeat[neighbor_id] > 3.0 * simulation_speed: # fault timeout
 					if satellites[neighbor_id].active:
 						print("⚠ Satellite ", sat.id, " detects fault in neighbor ", neighbor_id)
 						satellites[neighbor_id].active = false
