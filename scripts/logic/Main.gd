@@ -18,12 +18,11 @@ onready var multi_mesh_instance := $MultiMeshInstance
 onready var option_btn := $Control/SpeedButton
 onready var status_label = $Label 
 
-
-var total_satellites = satellites_per_orbit * orbit_count
+onready var total_satellites = satellites_per_orbit * orbit_count
 var satellite_angles = []
-var live_count = total_satellites
+onready var live_count = total_satellites
 var fallen_count = 0
-export(int) var cylces_count = 0
+var cylces_count = 0
 var simulation_time = 0.0 # Tempo simulato in secondi
 
 var satellites = [] # ogni elemento: {id, orbit_id, theta, neighbors, last_heartbeat_times, repositioning, target_theta}
@@ -372,11 +371,17 @@ func format_simulation_time(total_seconds: float) -> String:
 
 func update_heartbeats(delta):
 	for sat in satellites:
-		sat.heartbeat_timer += delta
+		if simulation_speed != 0:
+			sat.heartbeat_timer += delta / simulation_speed
+		else:
+			sat.heartbeat_timer += 0
 		for neighbor_id in sat.neighbors:
-			sat.last_heartbeat[neighbor_id] += delta
+			if simulation_speed != 0:
+				sat.last_heartbeat[neighbor_id] += delta / simulation_speed
+			else:
+				sat.last_heartbeat[neighbor_id] += 0
 		# Invia heartbeat ogni 1 secondo
-		if sat.heartbeat_timer >= 1.0 * simulation_speed:
+		if sat.heartbeat_timer >= 1.0:
 			for neighbor_id in sat.neighbors:
 				# Simula ricezione dal satellite verso il vicino
 				var neighbor = satellites[neighbor_id]
@@ -385,7 +390,7 @@ func update_heartbeats(delta):
 			sat.heartbeat_timer = 0.0
 		# Controlla se un vicino è considerato morto
 		for neighbor_id in sat.neighbors:
-			if sat.last_heartbeat[neighbor_id] > 3.0 * simulation_speed: # fault timeout
+			if sat.last_heartbeat[neighbor_id] > 3.0: # fault timeout
 					if satellites[neighbor_id].active:
 						print("⚠ Satellite ", sat.id, " detects fault in neighbor ", neighbor_id)
 						satellites[neighbor_id].active = false
