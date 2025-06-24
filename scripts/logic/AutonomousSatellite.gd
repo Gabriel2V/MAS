@@ -32,7 +32,7 @@ var repositioning_active: bool = false
 var target_theta: float = 0.0
 var repositioning_speed_multiplier: float = 3.0  # Più veloce
 
-# Parametri di degrado migliorati
+# Parametri di degrado 
 var base_degradation_rate: float = 0.00001
 var stress_multiplier: float = 1.0  # Aumenta sotto stress
 var repair_rate: float = 0.00005    # Auto-riparazione lenta
@@ -364,9 +364,6 @@ func start_autonomous_repositioning(new_target: float, reason: String):
 	send_message_to_neighbor(left_neighbor_id, intent_msg)
 	send_message_to_neighbor(right_neighbor_id, intent_msg)
 
-# ============================================================================
-# FUNZIONI DI COMUNICAZIONE MIGLIORATE
-# ============================================================================
 
 func receive_message(message: Dictionary):
 	"""Riceve e gestisce messaggi dai vicini"""
@@ -416,9 +413,6 @@ func send_repositioning_complete_notification():
 	send_message_to_neighbor(left_neighbor_id, complete_msg)
 	send_message_to_neighbor(right_neighbor_id, complete_msg)
 
-# ============================================================================
-# FUNZIONI UTILITY MIGLIORATE
-# ============================================================================
 
 func angle_distance(angle1: float, angle2: float) -> float:
 	"""Calcola distanza minima tra due angoli"""

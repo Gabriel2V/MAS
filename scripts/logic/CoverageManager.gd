@@ -48,7 +48,7 @@ func is_cell_covered(cell_lat: float, cell_lon: float, sat_pos: Vector3) -> bool
 	var distance = sat_pos.distance_to(cell_pos)
 	return distance <= COVERAGE_RADIUS_KM
 
-func update_coverage(satellites: Array, satellite_manager: SatelliteManager):
+func update_coverage(satellites: Array, orbit_count: int, orbit_radius: float, orbit_inclination_deg: float, ogg: FuncRef):
 	if coverage_image == null:
 		print("ERRORE: coverage_image è null!")
 		return
@@ -62,10 +62,10 @@ func update_coverage(satellites: Array, satellite_manager: SatelliteManager):
 		if not s.active or s.falling or s.removed:
 			continue
 		
-		var RAAN = deg2rad(s.orbit_id * 360.0 / satellite_manager.orbit_count)
-		var pos = satellite_manager.orbital_position(
-			satellite_manager.orbit_radius, 
-			satellite_manager.orbit_inclination_deg, 
+		var RAAN = deg2rad(s.orbit_id * 360.0 / orbit_count)
+		var pos = ogg.orbital_position(
+			orbit_radius, 
+			orbit_inclination_deg, 
 			RAAN, 
 			s.theta
 		)

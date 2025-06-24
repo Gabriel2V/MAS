@@ -1,6 +1,6 @@
 # Controller principale per sistema di satelliti completamente autonomo
 extends Node
-
+class_name Main
 export(float, 0.1, 100.0) var simulation_speed := 1.0
 export(int) var satellites_per_orbit = 24
 export(int) var orbit_count = 36
@@ -133,8 +133,11 @@ func update_coverage_and_stats():
 				"orbit_id": satellite.orbit_id,
 				"active": true
 			})
-	
-	coverage_manager.update_coverage(active_satellites, self)
+	var  ogg = FuncRef.new()
+	ogg.set_instance(self)
+	ogg.set_function("orbital_position") 
+
+	coverage_manager.update_coverage(active_satellites, orbit_count, orbit_radius, orbit_inclination_deg, ogg)
 	var coverage_percent = coverage_manager.estimate_coverage()
 	
 	update_ui(stats, coverage_percent)

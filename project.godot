@@ -30,6 +30,11 @@ _global_script_classes=[ {
 "path": "res://scripts/logic/HeartbeatManager.gd"
 }, {
 "base": "Node",
+"class": "Main",
+"language": "GDScript",
+"path": "res://scripts/logic/Main.gd"
+}, {
+"base": "Node",
 "class": "SatelliteCommSystem",
 "language": "GDScript",
 "path": "res://scripts/logic/SatelliteCommSystem.gd"
@@ -49,6 +54,7 @@ _global_script_class_icons={
 "CoverageManager": "",
 "DataCollector": "",
 "HeartbeatManager": "",
+"Main": "",
 "SatelliteCommSystem": "",
 "SatelliteManager": "",
 "SatelliteRenderer": ""
