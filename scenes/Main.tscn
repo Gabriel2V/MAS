@@ -1,10 +1,14 @@
-[gd_scene load_steps=10 format=2]
+[gd_scene load_steps=14 format=2]
 
 [ext_resource path="res://scripts/logic/Earth.gd" type="Script" id=1]
 [ext_resource path="res://assets/WorldMap16k.jpg" type="Texture" id=2]
 [ext_resource path="res://scripts/logic/Main.gd" type="Script" id=3]
 [ext_resource path="res://scripts/utils/CameraReactiveScript.gd" type="Script" id=4]
 [ext_resource path="res://scripts/utils/DataCollector.gd" type="Script" id=5]
+[ext_resource path="res://scripts/logic/SatellteManager.gd" type="Script" id=6]
+[ext_resource path="res://scripts/logic/CoverageManager.gd" type="Script" id=7]
+[ext_resource path="res://scripts/logic/HeartbeatManager.gd" type="Script" id=8]
+[ext_resource path="res://scripts/logic/SatelliteRenderer.gd" type="Script" id=9]
 
 [sub_resource type="SpatialMaterial" id=5]
 vertex_color_use_as_albedo = true
@@ -99,5 +103,17 @@ Dead satellites: "
 
 [node name="DataCollector" type="Node" parent="."]
 script = ExtResource( 5 )
+
+[node name="SatelliteManager" type="Node" parent="."]
+script = ExtResource( 6 )
+
+[node name="SatelliteRenderer" type="Node" parent="."]
+script = ExtResource( 9 )
+
+[node name="CoverageManager" type="Node" parent="."]
+script = ExtResource( 7 )
+
+[node name="HeartbeatManager" type="Node" parent="."]
+script = ExtResource( 8 )
 
 [connection signal="item_selected" from="Control/SpeedButton" to="." method="_on_SpeedButton_item_selected"]

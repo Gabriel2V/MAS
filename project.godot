@@ -8,6 +8,40 @@
 
 config_version=4
 
+_global_script_classes=[ {
+"base": "Node",
+"class": "CoverageManager",
+"language": "GDScript",
+"path": "res://scripts/logic/CoverageManager.gd"
+}, {
+"base": "Node",
+"class": "DataCollector",
+"language": "GDScript",
+"path": "res://scripts/utils/DataCollector.gd"
+}, {
+"base": "Node",
+"class": "HeartbeatManager",
+"language": "GDScript",
+"path": "res://scripts/logic/HeartbeatManager.gd"
+}, {
+"base": "Node",
+"class": "SatelliteManager",
+"language": "GDScript",
+"path": "res://scripts/logic/SatellteManager.gd"
+}, {
+"base": "Node",
+"class": "SatelliteRenderer",
+"language": "GDScript",
+"path": "res://scripts/logic/SatelliteRenderer.gd"
+} ]
+_global_script_class_icons={
+"CoverageManager": "",
+"DataCollector": "",
+"HeartbeatManager": "",
+"SatelliteManager": "",
+"SatelliteRenderer": ""
+}
+
 [application]
 
 config/name="Nuovo Progetto Di Gioco"
