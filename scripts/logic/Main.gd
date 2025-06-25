@@ -62,7 +62,7 @@ func initialize_autonomous_constellation():
 				orbit_count)
 				
 			satellite.angular_velocity = realistic_angular_velocity
-			satellite.comm_system = comm_system
+			
 			
 			# Aggiungi alla scena e registra nel sistema di comunicazione
 			add_child(satellite)
@@ -137,7 +137,7 @@ func update_coverage_and_stats():
 	ogg.set_instance(self)
 	ogg.set_function("orbital_position") 
 
-	coverage_manager.update_coverage(active_satellites, orbit_count, orbit_radius, orbit_inclination_deg, ogg)
+	coverage_manager.update_coverage(active_satellites)
 	var coverage_percent = coverage_manager.estimate_coverage()
 	
 	update_ui(stats, coverage_percent)

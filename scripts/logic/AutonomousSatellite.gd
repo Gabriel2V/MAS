@@ -10,6 +10,7 @@ var angular_velocity: float
 var original_angular_velocity: float
 var active: bool = true
 var health_status: float = 1.0  # 0.0 = morto, 1.0 = perfetto
+var comm_system: SatelliteCommSystem
 
 # Conoscenza locale limitata
 var left_neighbor_id: int = -1
@@ -39,6 +40,8 @@ var repair_rate: float = 0.00005    # Auto-riparazione lenta
 
 # Sistema di comunicazione
 func get_comm_system() -> SatelliteCommSystem:
+	if comm_system:
+		return comm_system
 	var main = get_tree().root.get_child(0)  # Ottiene Main
 	return main.get_node("SatelliteCommsystem")  # Nome esatto come in scena
 
