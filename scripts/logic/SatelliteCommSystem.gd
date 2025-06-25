@@ -1,3 +1,4 @@
+# Sistema di comunicazione tra i nodi Satellite
 extends Node
 class_name SatelliteCommSystem
 

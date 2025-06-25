@@ -34,7 +34,7 @@ var target_theta: float = 0.0
 var repositioning_speed_multiplier: float = 3.0  # Più veloce
 
 # Parametri di degrado 
-var base_degradation_rate: float = 0.00001
+var base_degradation_rate: float = 0.001
 var stress_multiplier: float = 1.0  # Aumenta sotto stress
 var repair_rate: float = 0.00005    # Auto-riparazione lenta
 
@@ -154,7 +154,7 @@ func autonomous_health_management(delta: float):
 	# Degrado casuale
 	if randf() < degradation:
 		health_status -= rand_range(0.05, 0.15)
-		print("Satellite ", satellite_id, " health degraded to ", health_status)
+		#print("Satellite ", satellite_id, " health degraded to ", health_status)
 	
 	# Auto-riparazione lenta quando non sotto stress
 	if stress_multiplier < 1.2 and health_status < 1.0:
@@ -171,7 +171,7 @@ func autonomous_shutdown():
 		return
 		
 	active = false
-	print("Satellite ", satellite_id, " autonomously shutting down (health: ", health_status, ")")
+	#print("Satellite ", satellite_id, " autonomously shutting down (health: ", health_status, ")")
 	
 	# Informa i vicini prima di morire
 	send_failure_notification()
@@ -368,7 +368,7 @@ func start_autonomous_repositioning(new_target: float, reason: String):
 	repositioning_active = true
 	target_theta = new_target
 	
-	print("Satellite ", satellite_id, " starting repositioning for: ", reason, " to ", rad2deg(target_theta), "°")
+	#print("Satellite ", satellite_id, " starting repositioning for: ", reason, " to ", rad2deg(target_theta), "°")
 	
 	# Notifica intenzione ai vicini
 	var intent_msg = {
@@ -417,7 +417,7 @@ func check_neighbor_timeouts(delta: float):
 		if neighbor_states[neighbor_id].last_heartbeat > fault_tolerance_threshold:
 			if neighbor_states[neighbor_id].active:
 				neighbor_states[neighbor_id].active = false
-				print("Satellite ", satellite_id, " detected neighbor ", neighbor_id, " timeout")
+				#print("Satellite ", satellite_id, " detected neighbor ", neighbor_id, " timeout")
 
 func send_repositioning_complete_notification():
 	"""Notifica completamento riposizionamento"""
@@ -477,7 +477,7 @@ func handle_neighbor_failure(message: Dictionary):
 	if failed_neighbor in neighbor_states:
 		neighbor_states[failed_neighbor].active = false
 		neighbor_states[failed_neighbor].health = 0.0
-		print("Satellite ", satellite_id, " confirmed failure of neighbor ", failed_neighbor)
+		#print("Satellite ", satellite_id, " confirmed failure of neighbor ", failed_neighbor)
 
 func handle_neighbor_repositioning_intent(message: Dictionary):
 	"""Gestisce intenzione di riposizionamento del vicino"""
@@ -486,8 +486,8 @@ func handle_neighbor_repositioning_intent(message: Dictionary):
 	var reason = message.get("reason", "unknown")
 	
 	# Evita collisioni adattando il proprio comportamento
-	if abs(neighbor_target - theta) < desired_spacing * 0.3:
-		print("Satellite ", satellite_id, " avoiding collision with neighbor ", neighbor_id)
+	#if abs(neighbor_target - theta) < desired_spacing * 0.3:
+		#print("Satellite ", satellite_id, " avoiding collision with neighbor ", neighbor_id)
 		# Potrebbe decidere di aspettare o modificare la propria strategia
 
 func handle_neighbor_repositioning_complete(message: Dictionary):
