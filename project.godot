@@ -25,11 +25,6 @@ _global_script_classes=[ {
 "path": "res://scripts/utils/DataCollector.gd"
 }, {
 "base": "Node",
-"class": "HeartbeatManager",
-"language": "GDScript",
-"path": "res://scripts/logic/HeartbeatManager.gd"
-}, {
-"base": "Node",
 "class": "Main",
 "language": "GDScript",
 "path": "res://scripts/logic/Main.gd"
@@ -40,11 +35,6 @@ _global_script_classes=[ {
 "path": "res://scripts/logic/SatelliteCommSystem.gd"
 }, {
 "base": "Node",
-"class": "SatelliteManager",
-"language": "GDScript",
-"path": "res://scripts/logic/SatellteManager.gd"
-}, {
-"base": "Node",
 "class": "SatelliteRenderer",
 "language": "GDScript",
 "path": "res://scripts/logic/SatelliteRenderer.gd"
@@ -53,10 +43,8 @@ _global_script_class_icons={
 "AutonomousSatellite": "",
 "CoverageManager": "",
 "DataCollector": "",
-"HeartbeatManager": "",
 "Main": "",
 "SatelliteCommSystem": "",
-"SatelliteManager": "",
 "SatelliteRenderer": ""
 }
 

@@ -54,56 +54,56 @@ func update_autonomous_satellite_visuals(satellite_data: Array, delta: float):
 			color = NORMAL_COLOR
 		multi_mesh_instance.multimesh.set_instance_custom_data(i, color)
 
-func update_satellite_visuals(satellites: Array, satellite_manager: SatelliteManager, delta: float):
-	if not multi_mesh_instance or not multi_mesh_instance.multimesh:
-		return
-	
-	simulation_time += delta
-	var blink_factor = abs(sin(simulation_time * BLINK_SPEED))
-	
-	for i in range(satellites.size()):
-		var sat = satellites[i]
-		
-		# Salta satelliti completamente rimossi
-		if sat.removed:
-			# Nascondi il satellite
-			var transform = Transform()
-			transform.basis = Basis().scaled(Vector3.ZERO)
-			multi_mesh_instance.multimesh.set_instance_transform(i, transform)
-			continue
-		
-		# IMPORTANTE: Aggiorna l'angolo del satellite
-		if sat.active or sat.falling:
-			satellite_manager.satellite_angles[i] += sat.angular_velocity * delta
-			sat.theta = satellite_manager.satellite_angles[i]
-		
-		# Calcola posizione
-		var RAAN = deg2rad(sat.orbit_id * 360.0 / satellite_manager.orbit_count)
-		var pos = satellite_manager.orbital_position(
-			satellite_manager.orbit_radius,
-			satellite_manager.orbit_inclination_deg,
-			RAAN,
-			sat.theta
-		)
-		
-		# Modifica posizione per satelliti in caduta
-		if sat.falling:
-			var direction_to_center = -pos.normalized()
-			var randomness = Vector3(
-				rand_range(-0.1, 0.1),
-				rand_range(-0.1, 0.1),
-				rand_range(-0.1, 0.1)
-			)
-			var fall_speed = sat.fall_timer * 2.0
-			pos += direction_to_center * fall_speed * delta + randomness * delta
-		
-		# Aggiorna transform
-		var transform = Transform().translated(pos)
-		transform.basis = Basis().scaled(Vector3.ONE * 0.3)
-		multi_mesh_instance.multimesh.set_instance_transform(i, transform)
-		
-		# Aggiorna colore
-		update_satellite_color(i, sat, blink_factor)
+#func update_satellite_visuals(satellites: Array, satellite_manager: SatelliteManager, delta: float):
+#	if not multi_mesh_instance or not multi_mesh_instance.multimesh:
+#		return
+#
+#	simulation_time += delta
+#	var blink_factor = abs(sin(simulation_time * BLINK_SPEED))
+#
+#	for i in range(satellites.size()):
+#		var sat = satellites[i]
+#
+#		# Salta satelliti completamente rimossi
+#		if sat.removed:
+#			# Nascondi il satellite
+#			var transform = Transform()
+#			transform.basis = Basis().scaled(Vector3.ZERO)
+#			multi_mesh_instance.multimesh.set_instance_transform(i, transform)
+#			continue
+#
+#		# IMPORTANTE: Aggiorna l'angolo del satellite
+#		if sat.active or sat.falling:
+#			satellite_manager.satellite_angles[i] += sat.angular_velocity * delta
+#			sat.theta = satellite_manager.satellite_angles[i]
+#
+#		# Calcola posizione
+#		var RAAN = deg2rad(sat.orbit_id * 360.0 / satellite_manager.orbit_count)
+#		var pos = satellite_manager.orbital_position(
+#			satellite_manager.orbit_radius,
+#			satellite_manager.orbit_inclination_deg,
+#			RAAN,
+#			sat.theta
+#		)
+#
+#		# Modifica posizione per satelliti in caduta
+#		if sat.falling:
+#			var direction_to_center = -pos.normalized()
+#			var randomness = Vector3(
+#				rand_range(-0.1, 0.1),
+#				rand_range(-0.1, 0.1),
+#				rand_range(-0.1, 0.1)
+#			)
+#			var fall_speed = sat.fall_timer * 2.0
+#			pos += direction_to_center * fall_speed * delta + randomness * delta
+#
+#		# Aggiorna transform
+#		var transform = Transform().translated(pos)
+#		transform.basis = Basis().scaled(Vector3.ONE * 0.3)
+#		multi_mesh_instance.multimesh.set_instance_transform(i, transform)
+#
+#		# Aggiorna colore
+#		update_satellite_color(i, sat, blink_factor)
 
 func update_satellite_color(satellite_index: int, satellite: Dictionary, blink_factor: float):
 	if not multi_mesh_instance or not multi_mesh_instance.multimesh:

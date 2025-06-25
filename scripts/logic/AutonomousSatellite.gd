@@ -43,13 +43,23 @@ func get_comm_system() -> SatelliteCommSystem:
 	if comm_system:
 		return comm_system
 	var main = get_tree().root.get_child(0)  # Ottiene Main
-	return main.get_node("SatelliteCommsystem")  # Nome esatto come in scena
+	if main.has_node("SatelliteCommSystem"):
+		comm_system = main.get_node("SatelliteCommSystem")
+		return comm_system
+	elif main.has_node("SatelliteCommsystem"):
+		comm_system = main.get_node("SatelliteCommsystem")
+		return comm_system
+	else:
+		print("ERRORE: SatelliteCommSystem non trovato!")
+		return null
 
 
 func send_message_to_neighbor(neighbor_id: int, message: Dictionary):
 	var comm = get_comm_system()
 	if comm:
 		comm.send_message(satellite_id, neighbor_id, message)
+	else:
+		print("ERRORE: Impossibile inviare messaggio da satellite ", satellite_id, " a ", neighbor_id)
 
 # Metriche autonome per decision making
 var isolation_level: float = 0.0    # Quanto è isolato dai vicini
@@ -76,8 +86,8 @@ func init(id: int, orbit: int, pos_in_orbit: int, initial_theta: float, radius: 
 	desired_spacing = 2 * PI / satellites_per_orbit
 	
 	# Inizializza stato dei vicini
-	neighbor_states[left_neighbor_id] = {"active": true, "last_heartbeat": 0.0, "position": 0.0, "health": 1.0}
-	neighbor_states[right_neighbor_id] = {"active": true, "last_heartbeat": 0.0, "position": 0.0, "health": 1.0}
+	neighbor_states[left_neighbor_id] = {"active": true, "last_heartbeat": 0.0, "position": initial_theta - desired_spacing, "health": 1.0}
+	neighbor_states[right_neighbor_id] = {"active": true, "last_heartbeat": 0.0, "position": initial_theta + desired_spacing, "health": 1.0}
 
 func _process(delta: float):
 	if health_status <= 0.0:
@@ -189,7 +199,12 @@ func send_enhanced_heartbeat():
 		"isolation": isolation_level,
 		"repositioning": repositioning_active
 	}
-	
+	var comm = get_comm_system()
+	if comm:
+		send_message_to_neighbor(left_neighbor_id, heartbeat_msg)
+		send_message_to_neighbor(right_neighbor_id, heartbeat_msg)
+	else:
+		print("DEBUG: Satellite ", satellite_id, " non può inviare heartbeat - comm system non disponibile")
 	send_message_to_neighbor(left_neighbor_id, heartbeat_msg)
 	send_message_to_neighbor(right_neighbor_id, heartbeat_msg)
 
@@ -255,7 +270,7 @@ func make_strategic_decisions(situation: Dictionary):
 		return
 	
 	# Priorità 3: Ottimizzazione distribuzione
-	if stability_score < 0.7 and not repositioning_active:
+	if stability_score < 0.5 and not repositioning_active:
 		var balanced_position = calculate_balanced_position()
 		if angle_distance(theta, balanced_position) > desired_spacing * 0.1:
 			start_autonomous_repositioning(balanced_position, "optimization")
@@ -432,6 +447,11 @@ func is_neighbor_active(neighbor_id: int) -> bool:
 func get_neighbor_position(neighbor_id: int) -> float:
 	if neighbor_id in neighbor_states:
 		return neighbor_states[neighbor_id].position
+	# Invece di restituire theta, calcola una posizione stimata
+	if neighbor_id == left_neighbor_id:
+		return theta - desired_spacing
+	elif neighbor_id == right_neighbor_id:
+		return theta + desired_spacing
 	return theta
 
 func get_neighbor_health(neighbor_id: int) -> float:

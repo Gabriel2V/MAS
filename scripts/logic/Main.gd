@@ -131,11 +131,14 @@ func update_coverage_and_stats():
 			active_satellites.append({
 				"theta": satellite.theta,
 				"orbit_id": satellite.orbit_id,
-				"active": true
-			})
-	var  ogg = FuncRef.new()
-	ogg.set_instance(self)
-	ogg.set_function("orbital_position") 
+				"orbit_radius": orbit_radius,
+				"orbit_inclination_deg": orbit_inclination_deg,
+				"total_orbits": orbit_count,
+				"active": true,
+				"health_status": satellite.health_status })
+#	var  ogg = FuncRef.new()
+#	ogg.set_instance(self)
+#	ogg.set_function("orbital_position") 
 
 	coverage_manager.update_coverage(active_satellites)
 	var coverage_percent = coverage_manager.estimate_coverage()
@@ -170,9 +173,8 @@ func calculate_constellation_stats() -> Dictionary:
 func update_ui(stats: Dictionary, coverage_percent: float):
 	"""Aggiorna interfaccia utente"""
 	var time_string = format_simulation_time(simulation_time)
-	var status_text = "Live: %d | Degraded: %d | Repositioning: %d | Dead: %d\nSim Time: %s\nCoverage: %.2f%%" % [
-		stats.live, stats.degraded, stats.repositioning, stats.dead, time_string, coverage_percent
-	]
+	var status_text = "Live: %d\nDegraded: %d\nRepositioning: %d\nDead: %d\nSim Time: %s" % [
+		stats.live, stats.degraded, stats.repositioning, stats.dead, time_string]
 	
 	if stats.live == 0:
 		status_text += "\n⚠ CONSTELLATION FAILED ⚠"
@@ -193,11 +195,11 @@ func format_simulation_time(total_seconds: float) -> String:
 
 func _on_SpeedButton_item_selected(index):
 	match index:
-		0: simulation_speed = 0
-		1: simulation_speed = 1
-		2: simulation_speed = 2
-		3: simulation_speed = 10
-		4: simulation_speed = 100
+		0: Engine.time_scale = 0
+		1: Engine.time_scale = 1
+		2: Engine.time_scale = 2
+		3: Engine.time_scale = 10
+		4: Engine.time_scale = 100
 
 # Funzioni helper per compatibilità con coverage manager
 func get_satellites_per_orbit():
