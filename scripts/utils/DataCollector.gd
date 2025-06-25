@@ -47,13 +47,16 @@ const CASCADE_WINDOW = 15.0       # Finestra temporale per rilevare guasti a cas
 const CASCADE_THRESHOLD = 3       # Numero minimo di guasti per considerare una cascata
 
 func _ready():
-	simulation_start_time = OS.get_ticks_msec() / 1000.0
 	
+	simulation_start_time = OS.get_ticks_msec() / 1000.0
+	yield(get_tree(), "idle_frame")  # Aspetta un frame per l'inizializzazione
 	# Ottieni riferimenti ai componenti del sistema
 	main_node = get_node("/root/Main") if has_node("/root/Main") else get_parent()
 	if main_node:
 		satellites = main_node.satellites
 		coverage_manager = main_node.coverage_manager
+		if not coverage_manager:
+			print("ERRORE: CoverageManager non trovato!")
 		comm_system = main_node.comm_system
 	
 	print("DataCollector inizializzato per sistema di satelliti autonomi")
@@ -122,15 +125,17 @@ func collect_basic_satellite_stats() -> Dictionary:
 	}
 	
 	for satellite in satellites:
-		if satellite.health_status <= 0.0 or not satellite.active:
-			stats.dead += 1
-		elif satellite.health_status < 0.7:
-			stats.degraded += 1
-		elif satellite.repositioning_active:
-			stats.repositioning += 1
+		if satellite.active:
+			if satellite.repositioning_active and satellite.health_status > 0.3:
+				stats.repositioning += 1
+			if satellite.health_status > 0.8:
+				stats.active += 1
+			elif satellite.health_status > 0.3:
+				stats.degraded += 1
+			else:
+				stats.dead += 1
 		else:
-			stats.active += 1
-	
+			stats.dead += 1
 	return stats
 
 func analyze_spatial_distribution() -> Dictionary:
@@ -269,10 +274,11 @@ func analyze_terrestrial_coverage() -> Dictionary:
 		"coverage_stability": 0.0,
 		"uncovered_regions": 0
 	}
-	
+	#print("Coverage Manager disponibile? ", coverage_manager != null)  # Debug
 	if coverage_manager:
 		# Ottieni statistiche dettagliate sulla copertura
 		var coverage_stats = coverage_manager.get_coverage_statistics()
+		#print("Dati di copertura: ", coverage_manager.get_coverage_statistics())  # Debug
 		coverage_analysis.coverage_percentage = coverage_stats.weighted_coverage
 		
 		# Analizza copertura per regioni geografiche

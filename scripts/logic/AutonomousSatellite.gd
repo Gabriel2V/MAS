@@ -477,6 +477,11 @@ func handle_neighbor_failure(message: Dictionary):
 	if failed_neighbor in neighbor_states:
 		neighbor_states[failed_neighbor].active = false
 		neighbor_states[failed_neighbor].health = 0.0
+		
+		# Reagisci immediatamente al guasto del vicino
+	if not repositioning_active: 
+		var situation = { "coverage_gaps": [failed_neighbor], "critical_neighbors": [] }
+		make_strategic_decisions(situation)  # Forza un nuovo posizionamento
 		#print("Satellite ", satellite_id, " confirmed failure of neighbor ", failed_neighbor)
 
 func handle_neighbor_repositioning_intent(message: Dictionary):
@@ -499,7 +504,7 @@ func handle_neighbor_repositioning_complete(message: Dictionary):
 	if neighbor_id in neighbor_states:
 		neighbor_states[neighbor_id].position = final_position
 		neighbor_states[neighbor_id].repositioning = false
-		
+
 func calculate_orbital_position(radius: float, inclination_deg: float) -> Vector3:
 	"""Calcola la posizione orbitale 3D in modo autonomo"""
 	var inclination = deg2rad(inclination_deg)

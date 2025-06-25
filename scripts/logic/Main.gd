@@ -153,10 +153,10 @@ func calculate_constellation_stats() -> Dictionary:
 		"degraded": 0,
 		"dead": 0
 	}
-	
+
 	for satellite in satellites:
 		if satellite.active:
-			if satellite.repositioning_active:
+			if satellite.repositioning_active and satellite.health_status > 0.3:
 				stats.repositioning += 1
 			if satellite.health_status > 0.8:
 				stats.live += 1
@@ -164,8 +164,6 @@ func calculate_constellation_stats() -> Dictionary:
 				stats.degraded += 1
 			else:
 				stats.dead += 1
-				stats.repositioning -= 1
-			
 		else:
 			stats.dead += 1
 	
