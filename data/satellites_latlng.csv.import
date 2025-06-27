@@ -1,0 +1,16 @@
+[remap]
+
+importer="csv_translation"
+type="Translation"
+
+[deps]
+
+files=[ "res://data/satellites_latlng.0.000000.translation", "res://data/satellites_latlng.0.000000.translation" ]
+
+source_file="res://data/satellites_latlng.csv"
+dest_files=[ "res://data/satellites_latlng.0.000000.translation", "res://data/satellites_latlng.0.000000.translation" ]
+
+[params]
+
+compress=true
+delimiter=0

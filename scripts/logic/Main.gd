@@ -25,6 +25,8 @@ var stats_refresh_interval = 50
 const EARTH_MASS = 5.972e24
 const G = 6.674e-11
 
+var exported = false
+
 func _ready():
 	setup_ui()
 	initialize_autonomous_constellation()
@@ -89,6 +91,8 @@ func calculate_orbital_velocity() -> float:
 
 func _process(delta):
 	simulation_time += delta * simulation_speed   
+	delta *= simulation_speed
+	
 	# Aggiorna rendering e statistiche
 	update_satellite_rendering(delta)
 	if stats_refresh_cycles > stats_refresh_interval:
@@ -96,6 +100,9 @@ func _process(delta):
 		stats_refresh_cycles = 0
 	else:
 		stats_refresh_cycles += 1
+	if not exported:
+		satellite_positions_to_csv()
+		exported = true
 		
 func update_satellite_rendering(delta: float):
 	var satellite_data = []
@@ -175,7 +182,7 @@ func update_ui(stats: Dictionary, coverage_percent: float):
 	var status_text = "Live: %d\nDegraded: %d\nRepositioning: %d\nDead: %d\nSim Time: %s" % [
 		stats.live, stats.degraded, stats.repositioning, stats.dead, time_string]
 	
-	if stats.live == 0:
+	if stats.live == 0 and stats.degraded == 0:
 		status_text += "\n⚠ CONSTELLATION FAILED ⚠"
 		simulation_speed = 0.0
 	
@@ -194,11 +201,11 @@ func format_simulation_time(total_seconds: float) -> String:
 
 func _on_SpeedButton_item_selected(index):
 	match index:
-		0: Engine.time_scale = 0
-		1: Engine.time_scale = 1
-		2: Engine.time_scale = 2
-		3: Engine.time_scale = 10
-		4: Engine.time_scale = 100
+		0: simulation_speed = 0
+		1: simulation_speed = 1
+		2: simulation_speed = 2
+		3: simulation_speed = 10
+		4: simulation_speed = 100
 
 # Funzioni helper per compatibilità con coverage manager
 func get_satellites_per_orbit():
@@ -206,3 +213,25 @@ func get_satellites_per_orbit():
 
 func get_orbit_count():
 	return orbit_count
+
+func satellite_positions_to_csv():
+	var file = File.new()
+	var error = file.open("res://data/satellites_latlng.csv", File.WRITE)
+	if error != OK:
+		print("Errore nell'apertura del file CSV")
+		return
+	
+	for sat in satellites:
+		var orbit_id = sat.orbit_id
+		var RAAN = deg2rad(orbit_id * 360.0 / orbit_count)
+		var pos = orbital_position(orbit_radius, orbit_inclination_deg, RAAN, sat.theta)
+
+		# Calcolo lat/lng dal vettore pos
+		var r = pos.length()
+		var lat = asin(pos.y / r)
+		var lng = atan2(pos.z, pos.x)
+
+		file.store_line("%d,%.6f,%.6f" % [sat.satellite_id, rad2deg(lat), rad2deg(lng)])
+		
+	file.close()
+	print("Posizioni salvate correttamente.")

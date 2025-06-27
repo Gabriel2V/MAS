@@ -12,6 +12,9 @@ var active: bool = true
 var health_status: float = 1.0  # 0.0 = morto, 1.0 = perfetto
 var comm_system: SatelliteCommSystem
 
+
+onready var simulation_speed = get_node("/root/Main").simulation_speed
+
 # Conoscenza locale limitata
 var left_neighbor_id: int = -1
 var right_neighbor_id: int = -1
@@ -90,25 +93,27 @@ func init(id: int, orbit: int, pos_in_orbit: int, initial_theta: float, radius: 
 	neighbor_states[right_neighbor_id] = {"active": true, "last_heartbeat": 0.0, "position": initial_theta + desired_spacing, "health": 1.0}
 
 func _process(delta: float):
+	simulation_speed = get_node("/root/Main").simulation_speed
+	
 	if health_status <= 0.0:
 		if active:
 			autonomous_shutdown()
 		return
 	
 	# 1. Aggiorna metriche interne
-	update_internal_metrics(delta)
+	update_internal_metrics(delta * simulation_speed)
 	
 	# 2. Gestione salute autonoma
-	autonomous_health_management(delta)
+	autonomous_health_management(delta * simulation_speed)
 	
 	# 3. Heartbeat e comunicazione
-	autonomous_heartbeat(delta)
+	autonomous_heartbeat(delta, simulation_speed)
 	
 	# 4. Decisioni strategiche
-	autonomous_decision_making(delta)
+	autonomous_decision_making(delta * simulation_speed)
 	
 	# 5. Movimento orbitale
-	autonomous_movement(delta)
+	autonomous_movement(delta * simulation_speed)
 
 func update_internal_metrics(delta: float):
 	"""Aggiorna metriche interne per decision making"""
@@ -176,15 +181,18 @@ func autonomous_shutdown():
 	# Informa i vicini prima di morire
 	send_failure_notification()
 
-func autonomous_heartbeat(delta: float):
+func autonomous_heartbeat(delta: float, simulation_speed: float):
 	"""Sistema di heartbeat migliorato"""
-	heartbeat_timer += delta
-	
+	if simulation_speed != 0:
+		heartbeat_timer += delta * simulation_speed
+	else:
+		heartbeat_timer += 0
+		
 	if heartbeat_timer >= heartbeat_interval:
 		send_enhanced_heartbeat()
 		heartbeat_timer = 0.0
 	
-	check_neighbor_timeouts(delta)
+	check_neighbor_timeouts(delta, simulation_speed)
 
 func send_enhanced_heartbeat():
 	"""Invia heartbeat con più informazioni"""
@@ -409,11 +417,13 @@ func handle_enhanced_heartbeat(message: Dictionary):
 		"repositioning": message.get("repositioning", false)
 	}
 
-func check_neighbor_timeouts(delta: float):
+func check_neighbor_timeouts(delta: float, simulation_speed: float):
 	"""Controllo timeout migliorato"""
 	for neighbor_id in neighbor_states:
-		neighbor_states[neighbor_id].last_heartbeat += delta
-		
+		if simulation_speed != 0:
+			neighbor_states[neighbor_id].last_heartbeat += delta / simulation_speed
+		else:
+			neighbor_states[neighbor_id].last_heartbeat += 0
 		if neighbor_states[neighbor_id].last_heartbeat > fault_tolerance_threshold:
 			if neighbor_states[neighbor_id].active:
 				neighbor_states[neighbor_id].active = false

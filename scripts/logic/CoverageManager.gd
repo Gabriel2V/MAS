@@ -12,6 +12,7 @@ var map_width := int(360 / LON_STEP)
 var map_height := int(180 / LAT_STEP)
 var coverage_image: Image
 var coverage_texture: ImageTexture
+var exported_initial = false
 
 func _ready():
 	initialize_earth_grid()
@@ -113,6 +114,11 @@ func update_coverage(satellites: Array):
 	
 	# Aggiorna immagine
 	update_coverage_image()
+	
+	if not exported_initial:
+		initial_coverage_to_csv()
+		exported_initial = true
+
 
 func update_coverage_image():
 	coverage_image.lock()
@@ -243,3 +249,22 @@ func export_coverage_data() -> Dictionary:
 		})
 	
 	return export_data
+	
+func initial_coverage_to_csv():
+	var file = File.new()
+	var error = file.open("res://data/coverage_matrix.csv", File.WRITE)
+	if error != OK:
+		print("Errore nell'apertura del file CSV")
+		return
+	
+	for i in range(earth_grid.size()):
+		var cell = earth_grid[i]
+		# Supponendo che tu abbia memorizzato le coordinate di griglia
+		# ad esempio cell.grid_x e cell.grid_y
+		var status = "covered" if cell.covered else "not covered"
+		file.store_line(str(i) + "(" + "lat=" + str(cell.lat) 
+		+ "_lng=" + str(cell.lon) + ") : " + status)
+
+	file.close()
+	print("Coverage matrix salvata correttamente.")
+
