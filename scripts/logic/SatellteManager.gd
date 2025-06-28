@@ -249,3 +249,27 @@ func update_repositioning(satellite: Dictionary, delta: float):
 	var direction = sign(diff)
 	var base_velocity = satellite.original_angular_velocity
 	satellite.angular_velocity = base_velocity * repositioning_speed_multiplier * direction
+
+func satellite_positions_to_csv():
+	var file = File.new()
+	var error = file.open("res://data/satellites_latlng.csv", File.WRITE)
+	if error != OK:
+		print("Errore nell'apertura del file CSV")
+		return
+	
+	for sat in satellites:
+		if sat.removed:
+			continue
+		var orbit_id = sat.orbit_id
+		var RAAN = deg2rad(orbit_id * 360.0 / orbit_count)
+		var pos = orbital_position(orbit_radius, orbit_inclination_deg, RAAN, sat.theta)
+
+		# Calcolo lat/lng dal vettore pos
+		var r = pos.length()
+		var lat = asin(pos.y / r)
+		var lng = atan2(pos.z, pos.x)
+
+		file.store_line("%d,%d,%.6f,%.6f" % [sat.id, orbit_id, rad2deg(lat), rad2deg(lng)])
+		
+	file.close()
+	print("Posizioni salvate correttamente.")

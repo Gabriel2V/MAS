@@ -16,6 +16,8 @@ onready var coverage_texture_rect = $Control/CoverageMapPanel/CoverageMapTexture
 
 var simulation_time = 0.0
 var cycles_count = 0
+var exported = false
+
 
 func _ready():
 	setup_ui()
@@ -77,6 +79,10 @@ func _process(delta):
 	
 	# Aggiorna UI
 	update_status_ui(stats)
+	
+	if not exported:
+		satellite_manager.satellite_positions_to_csv()
+		exported = true
 	
 	# Controlla se tutti i satelliti sono morti
 	check_simulation_end(stats)
