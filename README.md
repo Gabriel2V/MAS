@@ -1,7 +1,7 @@
 # Low Earth Orbit Satellite Constellation
 ## Sistema Multi-Agente per Costellazioni Satellitari Autonome e Resilienti
 
-[![Godot]((https://img.shields.io/badge/Godot-3.6-blue))](https://godotengine.org/)
+[![Godot](https://img.shields.io/badge/Godot-3.6-blue)](https://godotengine.org/)
 
 ## 📖 Panoramica
 
