@@ -485,10 +485,10 @@ func start_autonomous_repositioning(new_target: float, reason: String):
 
 func receive_message(message: Dictionary):
 	match message.type:
-		"heartbeat":
-			handle_enhanced_heartbeat(message)
 		"failure_notification":
 			handle_neighbor_failure(message)
+		"heartbeat":
+			handle_enhanced_heartbeat(message)
 		"repositioning_intent":
 			handle_neighbor_repositioning_intent(message)
 		"repositioning_complete":
