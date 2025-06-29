@@ -82,10 +82,11 @@ func init(id: int, orbit: int, pos_in_orbit: int, initial_theta: float, radius: 
 	total_orbits = orbits_count
 	
 	# Calcola vicini
+
 	var satellites_per_orbit = 24
 	left_neighbor_id = orbit * satellites_per_orbit + ((pos_in_orbit - 1 + satellites_per_orbit) % satellites_per_orbit)
 	right_neighbor_id = orbit * satellites_per_orbit + ((pos_in_orbit + 1) % satellites_per_orbit)
-	
+	print("vicini calcolati: ",left_neighbor_id,"; ",right_neighbor_id)
 	desired_spacing = 2 * PI / satellites_per_orbit
 	
 	# Inizializza stato dei vicini
@@ -99,6 +100,10 @@ func _process(delta: float):
 		if active:
 			autonomous_shutdown()
 		return
+	
+	if original_angular_velocity == 0: # never init	
+		original_angular_velocity = angular_velocity
+
 	
 	# 1. Aggiorna metriche interne
 	update_internal_metrics(delta * simulation_speed)
@@ -265,7 +270,7 @@ func make_strategic_decisions(situation: Dictionary):
 	"""Prende decisioni strategiche basate sulla situazione"""
 	# Priorità 1: Coprire gap critici
 	if situation.coverage_gaps.size() > 0 and not repositioning_active:
-		var optimal_position = calculate_gap_coverage_position(situation.coverage_gaps)
+		var optimal_position = calculate_gap_coverage_position(situation.coverage_gaps, neighbor_states)
 		if angle_distance(theta, optimal_position) > desired_spacing * 0.2:
 			start_autonomous_repositioning(optimal_position, "gap_coverage")
 		return
@@ -283,21 +288,43 @@ func make_strategic_decisions(situation: Dictionary):
 		if angle_distance(theta, balanced_position) > desired_spacing * 0.1:
 			start_autonomous_repositioning(balanced_position, "optimization")
 
-func calculate_gap_coverage_position(gaps: Array) -> float:
-	"""Calcola posizione ottimale per coprire gap"""
+func calculate_gap_coverage_position(gaps: Array, neighbor_states: Dictionary) -> float:
+	"""Calcola il centro del gap tra due satelliti attivi noti"""
 	if gaps.size() == 0:
 		return theta
-	
-	# Strategia: posizionati al centro del gap più grande
-	var max_gap_size = 0.0
-	var best_position = theta
-	
-	for gap_neighbor_id in gaps:
-		# Calcola centro del gap
-		var gap_center = theta  # Placeholder - dovrebbe calcolare il centro reale del gap
-		best_position = gap_center
-	
-	return best_position
+
+	var max_gap = 0.0
+	var best_center = theta
+
+	for gap_id in gaps:
+		# Recupera le due posizioni note ai lati del gap
+		if not (gap_id in neighbor_states):
+			continue
+		
+		var missing_sat_state = neighbor_states[gap_id]
+		var gap_pos = missing_sat_state.position
+
+		# Trova l'altro vicino attivo (non il gap stesso)
+		for neighbor_id in neighbor_states.keys():
+			if neighbor_id == gap_id:
+				continue
+			if not is_neighbor_active(neighbor_id):
+				continue
+
+			var other_pos = neighbor_states[neighbor_id].position
+			var gap_angle = angle_distance(gap_pos, other_pos)
+			
+			if gap_angle > max_gap:
+				max_gap = gap_angle
+				var center = gap_pos + gap_angle / 2.0
+				if center >= 2 * PI:
+					center -= 2 * PI
+				best_center = center
+
+	print("bestcenter", best_center)
+	return best_center
+
+
 
 func calculate_support_position(critical_neighbors: Array) -> float:
 	"""Calcola posizione per supportare vicini critici"""
@@ -349,6 +376,8 @@ func autonomous_movement(delta: float):
 		theta += 2 * PI
 
 func execute_repositioning(delta: float):
+	print("ang vel", angular_velocity)
+	print("og ang vel", original_angular_velocity)
 	"""Esegue movimento di riposizionamento"""
 	var diff = target_theta - theta
 	

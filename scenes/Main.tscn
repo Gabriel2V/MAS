@@ -24,6 +24,7 @@ bg_color = Color( 0, 0.164706, 1, 1 )
 
 [node name="Main" type="Spatial"]
 script = ExtResource( 3 )
+orbit_count = 1
 
 [node name="MultiMeshInstance" type="MultiMeshInstance" parent="."]
 
