@@ -31,28 +31,28 @@
 30(lat=-40_lng=-180) : not covered
 31(lat=-40_lng=-155) : not covered
 32(lat=-40_lng=-130) : not covered
-33(lat=-40_lng=-105) : not covered
-34(lat=-40_lng=-80) : not covered
+33(lat=-40_lng=-105) : covered
+34(lat=-40_lng=-80) : covered
 35(lat=-40_lng=-55) : not covered
 36(lat=-40_lng=-30) : not covered
 37(lat=-40_lng=-5) : not covered
-38(lat=-40_lng=20) : not covered
+38(lat=-40_lng=20) : covered
 39(lat=-40_lng=45) : covered
 40(lat=-40_lng=70) : not covered
 41(lat=-40_lng=95) : not covered
 42(lat=-40_lng=120) : not covered
 43(lat=-40_lng=145) : covered
-44(lat=-40_lng=170) : not covered
+44(lat=-40_lng=170) : covered
 45(lat=-15_lng=-180) : not covered
 46(lat=-15_lng=-155) : not covered
 47(lat=-15_lng=-130) : not covered
-48(lat=-15_lng=-105) : not covered
+48(lat=-15_lng=-105) : covered
 49(lat=-15_lng=-80) : not covered
 50(lat=-15_lng=-55) : not covered
 51(lat=-15_lng=-30) : not covered
 52(lat=-15_lng=-5) : not covered
 53(lat=-15_lng=20) : not covered
-54(lat=-15_lng=45) : not covered
+54(lat=-15_lng=45) : covered
 55(lat=-15_lng=70) : not covered
 56(lat=-15_lng=95) : not covered
 57(lat=-15_lng=120) : not covered
@@ -60,15 +60,15 @@
 59(lat=-15_lng=170) : covered
 60(lat=10_lng=-180) : not covered
 61(lat=10_lng=-155) : not covered
-62(lat=10_lng=-130) : not covered
+62(lat=10_lng=-130) : covered
 63(lat=10_lng=-105) : not covered
 64(lat=10_lng=-80) : not covered
-65(lat=10_lng=-55) : not covered
+65(lat=10_lng=-55) : covered
 66(lat=10_lng=-30) : not covered
 67(lat=10_lng=-5) : covered
 68(lat=10_lng=20) : not covered
 69(lat=10_lng=45) : not covered
-70(lat=10_lng=70) : not covered
+70(lat=10_lng=70) : covered
 71(lat=10_lng=95) : not covered
 72(lat=10_lng=120) : not covered
 73(lat=10_lng=145) : not covered
@@ -84,7 +84,7 @@
 83(lat=35_lng=20) : not covered
 84(lat=35_lng=45) : not covered
 85(lat=35_lng=70) : not covered
-86(lat=35_lng=95) : not covered
+86(lat=35_lng=95) : covered
 87(lat=35_lng=120) : not covered
 88(lat=35_lng=145) : not covered
 89(lat=35_lng=170) : not covered

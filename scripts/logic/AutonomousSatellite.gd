@@ -41,6 +41,8 @@ var base_degradation_rate: float = 0.001
 var stress_multiplier: float = 1.0  # Aumenta sotto stress
 var repair_rate: float = 0.00005    # Auto-riparazione lenta
 
+var registered = false
+
 # Sistema di comunicazione
 func get_comm_system() -> SatelliteCommSystem:
 	if comm_system:
@@ -86,14 +88,19 @@ func init(id: int, orbit: int, pos_in_orbit: int, initial_theta: float, radius: 
 	var satellites_per_orbit = 24
 	left_neighbor_id = orbit * satellites_per_orbit + ((pos_in_orbit - 1 + satellites_per_orbit) % satellites_per_orbit)
 	right_neighbor_id = orbit * satellites_per_orbit + ((pos_in_orbit + 1) % satellites_per_orbit)
-	print("vicini calcolati: ",left_neighbor_id,"; ",right_neighbor_id)
 	desired_spacing = 2 * PI / satellites_per_orbit
 	
 	# Inizializza stato dei vicini
 	neighbor_states[left_neighbor_id] = {"active": true, "last_heartbeat": 0.0, "position": initial_theta - desired_spacing, "health": 1.0}
 	neighbor_states[right_neighbor_id] = {"active": true, "last_heartbeat": 0.0, "position": initial_theta + desired_spacing, "health": 1.0}
+	
 
 func _process(delta: float):
+	# Registra il satellite nel sistema di comunicazione
+	if not registered:
+		get_comm_system().register_satellite(self)
+		registered = true
+	
 	simulation_speed = get_node("/root/Main").simulation_speed
 	
 	if health_status <= 0.0:
@@ -175,16 +182,53 @@ func autonomous_health_management(delta: float):
 	if health_status <= 0.0:
 		autonomous_shutdown()
 
+# Funzione modificata per l'autonomous shutdown con inoltro del vicino sopravvissuto
 func autonomous_shutdown():
-	"""Procedura di spegnimento autonomo"""
 	if not active:
 		return
-		
+
 	active = false
-	#print("Satellite ", satellite_id, " autonomously shutting down (health: ", health_status, ")")
-	
-	# Informa i vicini prima di morire
+	print("Satellite ", satellite_id, " shutting down. Notifying neighbors.")
+
+	# Invia notifica di fallimento con suggerimento su nuovo vicino
+	if is_neighbor_active(left_neighbor_id):
+		var msg = {
+			"type": "neighbor_replacement",
+			"sender_id": satellite_id,
+			"replacing_neighbor": left_neighbor_id,
+			"direction": "right",
+			"timestamp": OS.get_ticks_msec()
+		}
+		send_message_to_neighbor(right_neighbor_id, msg)
+
+	if is_neighbor_active(right_neighbor_id):
+		var msg = {
+			"type": "neighbor_replacement",
+			"sender_id": satellite_id,
+			"replacing_neighbor": right_neighbor_id,
+			"direction": "left",
+			"timestamp": OS.get_ticks_msec()
+		}
+		send_message_to_neighbor(left_neighbor_id, msg)
+
+	# Invia comunque notifica di fallimento
 	send_failure_notification()
+	
+# Nuova funzione: ricezione messaggi di sostituzione vicino
+func handle_neighbor_replacement(message: Dictionary):
+	"ricezione messaggi di sostituzione vicino"
+	var direction = message.get("direction", "")
+	var replacement_id = message.get("replacing_neighbor", -1)
+
+	if replacement_id == -1 or not (replacement_id in neighbor_states):
+		return
+
+	print("Satellite ", satellite_id, " aggiorna ", direction, " neighbor con: ", replacement_id)
+
+	if direction == "left":
+		left_neighbor_id = replacement_id
+	elif direction == "right":
+		right_neighbor_id = replacement_id
 
 func autonomous_heartbeat(delta: float, simulation_speed: float):
 	"""Sistema di heartbeat migliorato"""
@@ -289,40 +333,59 @@ func make_strategic_decisions(situation: Dictionary):
 			start_autonomous_repositioning(balanced_position, "optimization")
 
 func calculate_gap_coverage_position(gaps: Array, neighbor_states: Dictionary) -> float:
-	"""Calcola il centro del gap tra due satelliti attivi noti"""
+	"""Calcola lo spostamento necessario per coprire un gap creatosi dal fallimento di un satellite vicino.
+	
+	Args:
+		gaps: Array contenente gli ID dei satelliti mancanti (gap)
+		neighbor_states: Dizionario con {sat_id: {position: float, ...}} degli stati dei vicini
+		
+	Returns:
+		float: Lo spostamento da applicare alla posizione corrente (delta)
+	"""
+	
+	# Se non ci sono gap, nessuno spostamento necessario
 	if gaps.size() == 0:
-		return theta
-
-	var max_gap = 0.0
-	var best_center = theta
-
+		return 0.0
+	
+	# Per ogni gap rilevato
 	for gap_id in gaps:
-		# Recupera le due posizioni note ai lati del gap
+		# Verifica che il gap sia tra i nostri vicini conosciuti
 		if not (gap_id in neighbor_states):
 			continue
 		
-		var missing_sat_state = neighbor_states[gap_id]
-		var gap_pos = missing_sat_state.position
-
-		# Trova l'altro vicino attivo (non il gap stesso)
+		# Trova i vicini attivi adiacenti al gap
+		var active_neighbors = []
 		for neighbor_id in neighbor_states.keys():
 			if neighbor_id == gap_id:
 				continue
-			if not is_neighbor_active(neighbor_id):
-				continue
-
-			var other_pos = neighbor_states[neighbor_id].position
-			var gap_angle = angle_distance(gap_pos, other_pos)
+			if is_neighbor_active(neighbor_id):
+				active_neighbors.append(neighbor_id)
+		
+		# Se abbiamo esattamente due vicini attivi (uno per lato)
+		if active_neighbors.size() == 2:
+			var left_id = active_neighbors[0]
+			var right_id = active_neighbors[1]
 			
-			if gap_angle > max_gap:
-				max_gap = gap_angle
-				var center = gap_pos + gap_angle / 2.0
-				if center >= 2 * PI:
-					center -= 2 * PI
-				best_center = center
-
-	print("bestcenter", best_center)
-	return best_center
+			# Ordina i vicini per posizione
+			if neighbor_states[left_id].position > neighbor_states[right_id].position:
+				var temp = left_id
+				left_id = right_id
+				right_id = temp
+			
+			# Calcola la nuova posizione di equilibrio
+			var total_distance = neighbor_states[right_id].position - neighbor_states[left_id].position
+			var target_distance = total_distance / 3.0
+			
+			# Se siamo il satellite di sinistra, ci spostiamo a destra
+			if self.satellite_id == left_id:
+				return target_distance - (neighbor_states[gap_id].position - neighbor_states[left_id].position)
+			
+			# Se siamo il satellite di destra, ci spostiamo a sinistra
+			elif self.satellite_id == right_id:
+				return (neighbor_states[gap_id].position - neighbor_states[right_id].position) - target_distance
+	
+	# Caso default: nessuno spostamento necessario
+	return 0.0
 
 
 
@@ -376,8 +439,8 @@ func autonomous_movement(delta: float):
 		theta += 2 * PI
 
 func execute_repositioning(delta: float):
-	print("ang vel", angular_velocity)
-	print("og ang vel", original_angular_velocity)
+	#print("ang vel", angular_velocity)
+	#print("og ang vel", original_angular_velocity)
 	"""Esegue movimento di riposizionamento"""
 	var diff = target_theta - theta
 	
@@ -421,7 +484,6 @@ func start_autonomous_repositioning(new_target: float, reason: String):
 
 
 func receive_message(message: Dictionary):
-	"""Riceve e gestisce messaggi dai vicini"""
 	match message.type:
 		"heartbeat":
 			handle_enhanced_heartbeat(message)
@@ -431,6 +493,8 @@ func receive_message(message: Dictionary):
 			handle_neighbor_repositioning_intent(message)
 		"repositioning_complete":
 			handle_neighbor_repositioning_complete(message)
+		"neighbor_replacement":
+			handle_neighbor_replacement(message)
 
 func handle_enhanced_heartbeat(message: Dictionary):
 	"""Gestisce heartbeat migliorato con più informazioni"""
@@ -499,29 +563,55 @@ func get_neighbor_health(neighbor_id: int) -> float:
 	return 0.0
 
 func send_failure_notification():
-	"""Invia notifica di fallimento imminente"""
-	var failure_msg = {
+	var failure_msg_left = {
 		"type": "failure_notification",
 		"sender_id": satellite_id,
 		"final_health": health_status,
+		"replacement_hint": {
+			"new_neighbor": right_neighbor_id  # per il satellite a sinistra
+		},
 		"timestamp": OS.get_ticks_msec()
 	}
-	
-	send_message_to_neighbor(left_neighbor_id, failure_msg)
-	send_message_to_neighbor(right_neighbor_id, failure_msg)
+
+	var failure_msg_right = {
+		"type": "failure_notification",
+		"sender_id": satellite_id,
+		"final_health": health_status,
+		"replacement_hint": {
+			"new_neighbor": left_neighbor_id  # per il satellite a destra
+		},
+		"timestamp": OS.get_ticks_msec()
+	}
+
+	send_message_to_neighbor(left_neighbor_id, failure_msg_left)
+	send_message_to_neighbor(right_neighbor_id, failure_msg_right)
 
 func handle_neighbor_failure(message: Dictionary):
-	"""Gestisce fallimento di un vicino"""
 	var failed_neighbor = message.sender_id
+	var replacement = message.get("replacement_hint", {}).get("new_neighbor", -1)
+
+	print("Satellite", satellite_id, "ha ricevuto notifica di fallimento da", failed_neighbor, "→ nuovo vicino suggerito:", replacement)
+
 	if failed_neighbor in neighbor_states:
 		neighbor_states[failed_neighbor].active = false
 		neighbor_states[failed_neighbor].health = 0.0
-		
-		# Reagisci immediatamente al guasto del vicino
-	if not repositioning_active: 
-		var situation = { "coverage_gaps": [failed_neighbor], "critical_neighbors": [] }
-		make_strategic_decisions(situation)  # Forza un nuovo posizionamento
-		#print("Satellite ", satellite_id, " confirmed failure of neighbor ", failed_neighbor)
+
+	# Aggiorna i riferimenti ai vicini se necessario
+	if failed_neighbor == left_neighbor_id:
+		left_neighbor_id = replacement
+		print("Satellite", satellite_id, "→ nuovo left_neighbor:", left_neighbor_id)
+	elif failed_neighbor == right_neighbor_id:
+		right_neighbor_id = replacement
+		print("Satellite", satellite_id, "→ nuovo right_neighbor:", right_neighbor_id)
+
+	# Se non siamo già in riposizionamento, reagisci
+	if not repositioning_active and active and health_status > 0.3:
+		var situation = {
+			"coverage_gaps": [failed_neighbor],
+			"critical_neighbors": []
+		}
+		make_strategic_decisions(situation)
+
 
 func handle_neighbor_repositioning_intent(message: Dictionary):
 	"""Gestisce intenzione di riposizionamento del vicino"""
