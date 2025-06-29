@@ -174,7 +174,7 @@ func autonomous_health_management(delta: float):
 		#print("Satellite ", satellite_id, " health degraded to ", health_status)
 	
 	# Auto-riparazione lenta quando non sotto stress
-	if stress_multiplier < 1.2 and health_status < 1.0:
+	if stress_multiplier < 1.2 and health_status < 1.0 and health_status > 0:
 		health_status += repair_rate * delta
 		health_status = min(1.0, health_status)
 	
@@ -200,7 +200,7 @@ func autonomous_shutdown():
 			"timestamp": OS.get_ticks_msec()
 		}
 		send_message_to_neighbor(right_neighbor_id, msg)
-
+#
 	if is_neighbor_active(right_neighbor_id):
 		var msg = {
 			"type": "neighbor_replacement",
@@ -454,7 +454,7 @@ func execute_repositioning(delta: float):
 		# Riposizionamento completato
 		repositioning_active = false
 		angular_velocity = original_angular_velocity
-		print("Satellite ", satellite_id, " completed repositioning")
+		#print("Satellite ", satellite_id, " completed repositioning")
 		
 		# Notifica completamento
 		send_repositioning_complete_notification()
