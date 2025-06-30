@@ -36,6 +36,13 @@ var repositioning_active: bool = false
 var target_theta: float = 0.0
 var repositioning_speed_multiplier: float = 3.0  # Più veloce
 
+# Anti-glitch control
+var last_direction: int = 0
+var direction_change_counter: int = 0
+const MAX_DIRECTION_CHANGES = 4
+const DIRECTION_RESET_TIME = 3.0
+var direction_timer: float = 0.0
+
 # Parametri di degrado 
 var base_degradation_rate: float = 0.001
 var stress_multiplier: float = 1.0  # Aumenta sotto stress
@@ -99,6 +106,9 @@ func _process(delta: float):
 		if active:
 			autonomous_shutdown()
 		return
+		
+	if original_angular_velocity == 0: # never init	Add commentMore actions
+		original_angular_velocity = angular_velocity
 	
 	# 1. Aggiorna metriche interne
 	update_internal_metrics(delta * simulation_speed)
@@ -289,14 +299,35 @@ func calculate_gap_coverage_position(gaps: Array) -> float:
 		return theta
 	
 	# Strategia: posizionati al centro del gap più grande
-	var max_gap_size = 0.0
+	var max_gap = 0.0
 	var best_position = theta
 	
-	for gap_neighbor_id in gaps:
-		# Calcola centro del gap
-		var gap_center = theta  # Placeholder - dovrebbe calcolare il centro reale del gap
-		best_position = gap_center
-	
+	for gap_id in gaps:
+		# Recupera le due posizioni note ai lati del gap
+		if not (gap_id in neighbor_states):
+			continue
+		
+		var missing_sat_state = neighbor_states[gap_id]
+		var gap_pos = missing_sat_state.position
+
+		# Trova l'altro vicino attivo (non il gap stesso)
+		for neighbor_id in neighbor_states.keys():
+			if neighbor_id == gap_id:
+				continue
+			if not is_neighbor_active(neighbor_id):
+				continue
+
+			var other_pos = neighbor_states[neighbor_id].position
+			var gap_angle = angle_distance(gap_pos, other_pos)
+			
+			if gap_angle > max_gap:
+				max_gap = gap_angle
+				var center = gap_pos + gap_angle / 2.0
+				if center >= 2 * PI:
+					center -= 2 * PI
+				best_position = center
+
+	print("bestcenter", best_position)
 	return best_position
 
 func calculate_support_position(critical_neighbors: Array) -> float:
@@ -349,26 +380,43 @@ func autonomous_movement(delta: float):
 		theta += 2 * PI
 
 func execute_repositioning(delta: float):
-	"""Esegue movimento di riposizionamento"""
+	"""Esegue movimento di riposizionamento con controllo anti-glitch"""
 	var diff = target_theta - theta
-	
+
 	# Normalizza differenza
 	if diff > PI:
 		diff -= 2 * PI
 	elif diff < -PI:
 		diff += 2 * PI
-	
+
+	# Anti-glitch: evita loop oscillatori continui
+	var direction = sign(diff)
+	if direction != last_direction:
+		direction_change_counter += 1
+		last_direction = direction
+		direction_timer = 0.0
+	else:
+		direction_timer += delta
+
+	if direction_change_counter >= MAX_DIRECTION_CHANGES and direction_timer < DIRECTION_RESET_TIME:
+		print("[ANTI-GLITCH] Satellite ", satellite_id, " ha rilevato un loop oscillatorio. Forzato stop.")
+		repositioning_active = false
+		angular_velocity = original_angular_velocity
+		direction_change_counter = 0
+		return
+	elif direction_timer >= DIRECTION_RESET_TIME:
+		direction_change_counter = 0
+		direction_timer = 0.0
+
 	if abs(diff) < 0.01:
 		# Riposizionamento completato
 		repositioning_active = false
 		angular_velocity = original_angular_velocity
 		print("Satellite ", satellite_id, " completed repositioning")
-		
 		# Notifica completamento
 		send_repositioning_complete_notification()
 	else:
 		# Continua movimento verso target
-		var direction = sign(diff)
 		angular_velocity = original_angular_velocity * repositioning_speed_multiplier * direction
 
 func start_autonomous_repositioning(new_target: float, reason: String):
