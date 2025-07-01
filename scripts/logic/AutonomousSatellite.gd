@@ -52,6 +52,10 @@ var repair_rate: float = 0.00005    # Auto-riparazione lenta
 const MIN_SAFE_DISTANCE: float = 0.15  # Distanza minima sicura tra satelliti
 const MAX_REPOSITIONING_DISTANCE: float = 0.5  # Massimo movimento consentito
 
+var repositioning_cooldown: float = 10.0
+var cooldown_timer: float = 0.0
+
+
 # Sistema di comunicazione
 func get_comm_system() -> SatelliteCommSystem:
 	if comm_system:
@@ -102,6 +106,8 @@ func init(id: int, orbit: int, pos_in_orbit: int, initial_theta: float, radius: 
 	# Inizializza stato dei vicini
 	neighbor_states[left_neighbor_id] = {"active": true, "last_heartbeat": 0.0, "position": initial_theta - desired_spacing, "health": 1.0}
 	neighbor_states[right_neighbor_id] = {"active": true, "last_heartbeat": 0.0, "position": initial_theta + desired_spacing, "health": 1.0}
+	cooldown_timer = 0.0  # Inizializza il timer di cooldown
+
 
 func _process(delta: float):
 	simulation_speed = get_node("/root/Main").simulation_speed
@@ -234,8 +240,16 @@ func autonomous_decision_making(delta: float):
 	"""Sistema decisionale avanzato"""
 	decision_timer += delta
 	
+	if cooldown_timer > 0:
+		#print("sim cooldown", cooldown_timer)
+		cooldown_timer -= delta * simulation_speed
+	
+	
 	if decision_timer >= decision_interval:
 		# Analisi situazione completa
+		if cooldown_timer > 0:
+			decision_timer = 0.0
+			return
 		var situation = analyze_comprehensive_situation()
 		
 		# Prendi decisioni basate sulla situazione
@@ -567,15 +581,15 @@ func start_autonomous_repositioning(new_target: float, reason: String):
 	if not is_position_safe(new_target):
 		print("SAT ", satellite_id, " ABORTING repositioning: target position not safe")
 		return
-	
+	cooldown_timer = repositioning_cooldown
 	repositioning_active = true
 	target_theta = new_target
 	
-	print("SAT ", satellite_id, ": REPOSITIONING START")
-	print("  - Current pos: ", rad2deg(theta), "°")
-	print("  - Target pos: ", rad2deg(new_target), "°")
-	print("  - Distance: ", rad2deg(distance), "°")
-	print("  - Reason: ", reason)
+#	print("SAT ", satellite_id, ": REPOSITIONING START")
+#	print("  - Current pos: ", rad2deg(theta), "°")
+#	print("  - Target pos: ", rad2deg(new_target), "°")
+#	print("  - Distance: ", rad2deg(distance), "°")
+#	print("  - Reason: ", reason)
 	
 	# Notifica intenzione ai vicini
 	var intent_msg = {
