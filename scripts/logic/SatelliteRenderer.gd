@@ -7,7 +7,7 @@ const FAILING_COLOR = Color(1.0, 0.0, 0.0)      # Rosso
 const REPOSITIONING_COLOR = Color(1.0, 1.0, 0.0) # Giallo
 const NORMAL_COLOR = Color(0.0, 1.0, 0.0)        # Verde
 const INACTIVE_COLOR = Color(0.5, 0.5, 0.5)      # Grigio
-const REMOVAL_TIME = 5.0  # Tempo in secondi prima della rimozione
+const REMOVAL_TIME = 10.0  # Tempo in secondi prima della rimozione
 
 
 var multi_mesh_instance: MultiMeshInstance
@@ -38,28 +38,39 @@ func setup_multimesh(multimesh_node: MultiMeshInstance, satellite_count: int, me
 		satellite_timers[i] = 0.0
 	
 	return true
+	
 func update_autonomous_satellite_visuals(satellite_data: Array, delta: float):
 	if not multi_mesh_instance or not multi_mesh_instance.multimesh:
 		return
+	
 	simulation_time += delta
 	var blink_factor = abs(sin(simulation_time * BLINK_SPEED))
 	
 	for i in range(satellite_data.size()):
 		var sat = satellite_data[i]
-		
-		# Aggiorna timer per satelliti inattivi
+		# Gestione timer satelliti inattivi
 		if not sat.active or sat.health <= 0.0:
 			satellite_timers[i] += delta
 			
-			# Se il satellite è stato inattivo troppo a lungo, rimuovilo
-			if satellite_timers[i] >= REMOVAL_TIME and not i in removed_satellites:
+			# Visualizzazione grigia per i primi 10 secondi
+			if satellite_timers[i] < REMOVAL_TIME:
+				# AGGIUNTA: Visualizza in grigio per 10 secondi
+				var transform = Transform().translated(sat.position)
+				transform.basis = Basis().scaled(Vector3.ONE * 0.3)
+				multi_mesh_instance.multimesh.set_instance_transform(i, transform)
+				multi_mesh_instance.multimesh.set_instance_custom_data(i, INACTIVE_COLOR)
+				continue  # Salta le altre elaborazioni
+			
+			# Rimozione dopo 10 secondi
+			elif not i in removed_satellites:
 				remove_satellite_visual(i)
 				continue
+		
 		else:
-			# Reset timer se il satellite è tornato attivo
+			# Reset timer se il satellite è attivo
 			satellite_timers[i] = 0.0
 		
-		# Salta i satelliti già rimossi
+		# Salta i satelliti rimossi
 		if i in removed_satellites:
 			continue
 		
@@ -69,17 +80,14 @@ func update_autonomous_satellite_visuals(satellite_data: Array, delta: float):
 		
 		# Aggiorna colore basato sullo stato
 		var color
-		if not sat.active:
-			# Grigio inattivi
-			color = INACTIVE_COLOR
-		elif sat.repositioning:
-			# Giallo lampeggiante per satelliti in riposizionamento
+		if sat.repositioning:
+			# Giallo lampeggiante per riposizionamento
 			color = REPOSITIONING_COLOR.linear_interpolate(Color(0.5, 0.5, 0), blink_factor)
-		elif sat.health < 0.3:
-			# Rosso lampeggiante per satelliti in caduta
+		elif sat.health < 0.2:
+			# Rosso lampeggiante per salute critica
 			color = FAILING_COLOR.linear_interpolate(Color(0.5, 0, 0), blink_factor)
 		else:
-			# Verde per satelliti normali
+			# Verde per satelliti sani
 			color = NORMAL_COLOR
 		multi_mesh_instance.multimesh.set_instance_custom_data(i, color)
 		

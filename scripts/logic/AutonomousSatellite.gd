@@ -48,6 +48,10 @@ var base_degradation_rate: float = 0.001
 var stress_multiplier: float = 1.0  # Aumenta sotto stress
 var repair_rate: float = 0.00005    # Auto-riparazione lenta
 
+# Parametri per evitare collisioni
+const MIN_SAFE_DISTANCE: float = 0.15  # Distanza minima sicura tra satelliti
+const MAX_REPOSITIONING_DISTANCE: float = 0.5  # Massimo movimento consentito
+
 # Sistema di comunicazione
 func get_comm_system() -> SatelliteCommSystem:
 	if comm_system:
@@ -223,8 +227,8 @@ func send_enhanced_heartbeat():
 		send_message_to_neighbor(right_neighbor_id, heartbeat_msg)
 	else:
 		print("DEBUG: Satellite ", satellite_id, " non può inviare heartbeat - comm system non disponibile")
-	send_message_to_neighbor(left_neighbor_id, heartbeat_msg)
-	send_message_to_neighbor(right_neighbor_id, heartbeat_msg)
+	#send_message_to_neighbor(left_neighbor_id, heartbeat_msg)
+	#send_message_to_neighbor(right_neighbor_id, heartbeat_msg)
 
 func autonomous_decision_making(delta: float):
 	"""Sistema decisionale avanzato"""
@@ -272,70 +276,148 @@ func analyze_comprehensive_situation() -> Dictionary:
 	return situation
 
 func make_strategic_decisions(situation: Dictionary):
-	"""Prende decisioni strategiche basate sulla situazione"""
+	"""Decisioni più intelligenti con controllo anti-collisione"""
+	
 	# Priorità 1: Coprire gap critici
 	if situation.coverage_gaps.size() > 0 and not repositioning_active:
-		var optimal_position = calculate_gap_coverage_position(situation.coverage_gaps)
-		if angle_distance(theta, optimal_position) > desired_spacing * 0.2:
-			start_autonomous_repositioning(optimal_position, "gap_coverage")
-		return
-	
-	# Priorità 2: Supportare vicini critici
-	if situation.critical_neighbors.size() > 0 and health_status > 0.7:
-		var support_position = calculate_support_position(situation.critical_neighbors)
-		if angle_distance(theta, support_position) > desired_spacing * 0.15:
-			start_autonomous_repositioning(support_position, "neighbor_support")
-		return
-	
-	# Priorità 3: Ottimizzazione distribuzione
-	if stability_score < 0.5 and not repositioning_active:
-		var balanced_position = calculate_balanced_position()
-		if angle_distance(theta, balanced_position) > desired_spacing * 0.1:
-			start_autonomous_repositioning(balanced_position, "optimization")
-
-func calculate_gap_coverage_position(gaps: Array) -> float:
-	"""Calcola posizione ottimale per coprire gap"""
-	if gaps.size() == 0:
-		return theta
-	
-	# Strategia: posizionati al centro del gap più grande
-	var max_gap = 0.0
-	var best_position = theta
-	
-	for gap_id in gaps:
-		# Recupera le due posizioni note ai lati del gap
-		if not (gap_id in neighbor_states):
-			continue
-		
-		var missing_sat_state = neighbor_states[gap_id]
-		var gap_pos = missing_sat_state.position
-
-		# Trova l'altro vicino attivo (non il gap stesso)
-		for neighbor_id in neighbor_states.keys():
-			if neighbor_id == gap_id:
-				continue
-			if not is_neighbor_active(neighbor_id):
-				continue
-
-			var other_pos = neighbor_states[neighbor_id].position
-			var gap_angle = angle_distance(gap_pos, other_pos)
+		var optimal_position = calculate_safe_gap_coverage_position(situation.coverage_gaps)
+		if optimal_position != -1:  # -1 significa nessuna posizione sicura trovata
+			var distance_to_target = angle_distance(theta, optimal_position)
 			
-			if gap_angle > max_gap:
-				max_gap = gap_angle
-				var center = gap_pos + gap_angle / 2.0
-				if center >= 2 * PI:
-					center -= 2 * PI
-				best_position = center
-
-	print("bestcenter", best_position)
-	return best_position
-
-func calculate_support_position(critical_neighbors: Array) -> float:
-	"""Calcola posizione per supportare vicini critici"""
-	if critical_neighbors.size() == 0:
-		return theta
+			if distance_to_target > desired_spacing * 0.1 and distance_to_target < MAX_REPOSITIONING_DISTANCE:
+				start_autonomous_repositioning(optimal_position, "gap_coverage")
+			return
 	
-	# Avvicinati al vicino più critico
+	# Priorità 2: Supportare vicini critici (solo piccoli aggiustamenti)
+	if situation.critical_neighbors.size() > 0 and health_status > 0.7:
+		var support_position = calculate_safe_support_position(situation.critical_neighbors)
+		if support_position != -1:
+			var distance_to_target = angle_distance(theta, support_position)
+			
+			# Movimenti molto limitati per supporto
+			if distance_to_target > desired_spacing * 0.05 and distance_to_target < desired_spacing * 0.3:
+				start_autonomous_repositioning(support_position, "neighbor_support")
+			return
+	
+	# Priorità 3: Ottimizzazione distribuzione (solo piccoli aggiustamenti)
+	if stability_score < 0.5 and not repositioning_active:
+		var balanced_position = calculate_safe_balanced_position()
+		if balanced_position != -1:
+			var distance_to_target = angle_distance(theta, balanced_position)
+			
+			if distance_to_target > desired_spacing * 0.05 and distance_to_target < desired_spacing * 0.2:
+				start_autonomous_repositioning(balanced_position, "optimization")
+
+func get_all_active_satellite_positions() -> Array:
+	"""Ottieni tutte le posizioni dei satelliti attivi conosciuti"""
+	var positions = []
+	
+	# Aggiungi la propria posizione
+	positions.append(theta)
+	
+	# Aggiungi posizioni dei vicini attivi
+	for neighbor_id in [left_neighbor_id, right_neighbor_id]:
+		if is_neighbor_active(neighbor_id):
+			positions.append(get_neighbor_position(neighbor_id))
+	
+	return positions
+
+func is_position_safe(target_pos: float) -> bool:
+	"""Verifica se una posizione è sicura (non troppo vicina ad altri satelliti)"""
+	var active_positions = get_all_active_satellite_positions()
+	
+	for pos in active_positions:
+		if pos == theta:  # Salta la propria posizione
+			continue
+			
+		var distance = angle_distance(target_pos, pos)
+		if distance < MIN_SAFE_DISTANCE:
+			return false
+	
+	return true
+
+func find_safe_position_in_range(start_pos: float, end_pos: float, steps: int = 10) -> float:
+	"""Trova una posizione sicura in un range specificato"""
+	var start_normalized = normalize_angle(start_pos)
+	var end_normalized = normalize_angle(end_pos)
+	
+	# Gestisci il caso in cui il range attraversa 0/2π
+	var range_size = end_normalized - start_normalized
+	if range_size < 0:
+		range_size += 2 * PI
+	
+	var step_size = range_size / steps
+	
+	for i in range(steps + 1):
+		var test_pos = normalize_angle(start_normalized + i * step_size)
+		if is_position_safe(test_pos):
+			return test_pos
+	
+	return -1.0  # Nessuna posizione sicura trovata
+
+func calculate_safe_gap_coverage_position(gaps: Array) -> float:
+	"""Calcola posizione sicura per coprire gap"""
+	if gaps.size() == 0:
+		return -1.0
+	
+	var active_neighbors = []
+	for neighbor_id in [left_neighbor_id, right_neighbor_id]:
+		if is_neighbor_active(neighbor_id):
+			active_neighbors.append({
+				"id": neighbor_id,
+				"position": get_neighbor_position(neighbor_id)
+			})
+	
+	if active_neighbors.size() == 0:
+		# Nessun vicino attivo, cerca una posizione sicura nelle vicinanze
+		var search_start = theta - desired_spacing * 0.5
+		var search_end = theta + desired_spacing * 0.5
+		return find_safe_position_in_range(search_start, search_end)
+		
+	elif active_neighbors.size() == 1:
+		# Un vicino attivo, posizionati nel lato opposto
+		var neighbor_pos = active_neighbors[0].position
+		var opposite_side = normalize_angle(neighbor_pos + PI)
+		
+		# Cerca posizione sicura vicino al lato opposto
+		var search_start = opposite_side - desired_spacing * 0.5
+		var search_end = opposite_side + desired_spacing * 0.5
+		return find_safe_position_in_range(search_start, search_end)
+		
+	else:
+		# Due vicini attivi, trova il centro del gap più grande
+		var pos1 = active_neighbors[0].position
+		var pos2 = active_neighbors[1].position
+		
+		# Ordina le posizioni
+		if pos1 > pos2:
+			var temp = pos1
+			pos1 = pos2
+			pos2 = temp
+		
+		var gap1 = pos2 - pos1
+		var gap2 = (2 * PI) - gap1
+		
+		var gap_center: float
+		if gap1 > gap2:
+			gap_center = normalize_angle(pos1 + gap1 / 2.0)
+		else:
+			gap_center = normalize_angle(pos2 + gap2 / 2.0)
+		
+		# Verifica se il centro del gap è sicuro
+		if is_position_safe(gap_center):
+			return gap_center
+		
+		# Se non è sicuro, cerca nelle vicinanze
+		var search_start = gap_center - desired_spacing * 0.3
+		var search_end = gap_center + desired_spacing * 0.3
+		return find_safe_position_in_range(search_start, search_end)
+
+func calculate_safe_support_position(critical_neighbors: Array) -> float:
+	"""Calcola posizione sicura per supportare vicini critici"""
+	if critical_neighbors.size() == 0:
+		return -1.0
+	
 	var most_critical_id = critical_neighbors[0]
 	var most_critical_health = get_neighbor_health(most_critical_id)
 	
@@ -346,10 +428,27 @@ func calculate_support_position(critical_neighbors: Array) -> float:
 			most_critical_id = neighbor_id
 	
 	var neighbor_pos = get_neighbor_position(most_critical_id)
-	return theta + (neighbor_pos - theta) * 0.3  # Avvicinati del 30%
+	
+	# Calcola movimento limitato verso il vicino critico
+	var diff = neighbor_pos - theta
+	
+	# Normalizza la differenza
+	if diff > PI:
+		diff -= 2 * PI
+	elif diff < -PI:
+		diff += 2 * PI
+	
+	# Movimento molto limitato (solo 10% verso il vicino)
+	var target = normalize_angle(theta + diff * 0.1)
+	
+	# Verifica se la posizione è sicura
+	if is_position_safe(target):
+		return target
+	
+	return -1.0  # Nessuna posizione sicura trovata
 
-func calculate_balanced_position() -> float:
-	"""Calcola posizione bilanciata ottimale"""
+func calculate_safe_balanced_position() -> float:
+	"""Calcola posizione bilanciata sicura"""
 	var active_neighbors = []
 	
 	for neighbor_id in [left_neighbor_id, right_neighbor_id]:
@@ -357,13 +456,49 @@ func calculate_balanced_position() -> float:
 			active_neighbors.append(get_neighbor_position(neighbor_id))
 	
 	if active_neighbors.size() == 0:
-		return theta  # Rimani dove sei
+		return -1.0  # Nessun vicino attivo
+		
 	elif active_neighbors.size() == 1:
-		# Posizionati a distanza ottimale dall'unico vicino
-		return active_neighbors[0] + desired_spacing
+		# Posizionati a distanza sicura dall'unico vicino
+		var neighbor_pos = active_neighbors[0]
+		var target1 = normalize_angle(neighbor_pos + desired_spacing)
+		var target2 = normalize_angle(neighbor_pos - desired_spacing)
+		
+		# Scegli la posizione più vicina che sia sicura
+		var dist1 = angle_distance(theta, target1)
+		var dist2 = angle_distance(theta, target2)
+		
+		if dist1 < dist2:
+			if is_position_safe(target1):
+				return target1
+			elif is_position_safe(target2):
+				return target2
+		else:
+			if is_position_safe(target2):
+				return target2
+			elif is_position_safe(target1):
+				return target1
+				
 	else:
-		# Posizionati al centro tra i vicini
-		return (active_neighbors[0] + active_neighbors[1]) / 2.0
+		# Due vicini attivi, posizionati al centro se sicuro
+		var center = normalize_angle((active_neighbors[0] + active_neighbors[1]) / 2.0)
+		if is_position_safe(center):
+			return center
+		
+		# Se il centro non è sicuro, cerca nelle vicinanze
+		var search_start = center - desired_spacing * 0.2
+		var search_end = center + desired_spacing * 0.2
+		return find_safe_position_in_range(search_start, search_end)
+	
+	return -1.0
+
+func normalize_angle(angle: float) -> float:
+	"""Normalizza un angolo tra 0 e 2π"""
+	while angle >= 2 * PI:
+		angle -= 2 * PI
+	while angle < 0:
+		angle += 2 * PI
+	return angle
 
 func autonomous_movement(delta: float):
 	"""Movimento autonomo migliorato"""
@@ -420,11 +555,27 @@ func execute_repositioning(delta: float):
 		angular_velocity = original_angular_velocity * repositioning_speed_multiplier * direction
 
 func start_autonomous_repositioning(new_target: float, reason: String):
-	"""Inizia riposizionamento autonomo con ragione"""
+	"""Inizia riposizionamento autonomo con controlli di sicurezza migliorati"""
+	
+	# Controlli di sicurezza
+	var distance = angle_distance(theta, new_target)
+	
+	if distance > MAX_REPOSITIONING_DISTANCE:
+		print("SAT ", satellite_id, " ABORTING repositioning: distance too large (", rad2deg(distance), "°)")
+		return
+	
+	if not is_position_safe(new_target):
+		print("SAT ", satellite_id, " ABORTING repositioning: target position not safe")
+		return
+	
 	repositioning_active = true
 	target_theta = new_target
 	
-	#print("Satellite ", satellite_id, " starting repositioning for: ", reason, " to ", rad2deg(target_theta), "°")
+	print("SAT ", satellite_id, ": REPOSITIONING START")
+	print("  - Current pos: ", rad2deg(theta), "°")
+	print("  - Target pos: ", rad2deg(new_target), "°")
+	print("  - Distance: ", rad2deg(distance), "°")
+	print("  - Reason: ", reason)
 	
 	# Notifica intenzione ai vicini
 	var intent_msg = {
@@ -437,7 +588,6 @@ func start_autonomous_repositioning(new_target: float, reason: String):
 	
 	send_message_to_neighbor(left_neighbor_id, intent_msg)
 	send_message_to_neighbor(right_neighbor_id, intent_msg)
-
 
 func receive_message(message: Dictionary):
 	"""Riceve e gestisce messaggi dai vicini"""
@@ -489,7 +639,6 @@ func send_repositioning_complete_notification():
 	send_message_to_neighbor(left_neighbor_id, complete_msg)
 	send_message_to_neighbor(right_neighbor_id, complete_msg)
 
-
 func angle_distance(angle1: float, angle2: float) -> float:
 	"""Calcola distanza minima tra due angoli"""
 	var diff = abs(angle2 - angle1)
@@ -503,14 +652,24 @@ func is_neighbor_active(neighbor_id: int) -> bool:
 	return false
 
 func get_neighbor_position(neighbor_id: int) -> float:
-	if neighbor_id in neighbor_states:
+	"""Ottieni posizione del vicino con fallback sicuro"""
+	if neighbor_id in neighbor_states and neighbor_states[neighbor_id].active:
 		return neighbor_states[neighbor_id].position
-	# Invece di restituire theta, calcola una posizione stimata
+	
+	# Restituisci la posizione teorica iniziale
+	var satellites_per_orbit = 24
+	var neighbor_pos_in_orbit = neighbor_id % satellites_per_orbit
+	var my_pos_in_orbit = position_in_orbit
+	
 	if neighbor_id == left_neighbor_id:
-		return theta - desired_spacing
+		var left_pos_in_orbit = (my_pos_in_orbit - 1 + satellites_per_orbit) % satellites_per_orbit
+		return (left_pos_in_orbit * 2 * PI) / satellites_per_orbit
 	elif neighbor_id == right_neighbor_id:
-		return theta + desired_spacing
-	return theta
+		var right_pos_in_orbit = (my_pos_in_orbit + 1) % satellites_per_orbit
+		return (right_pos_in_orbit * 2 * PI) / satellites_per_orbit
+	
+	# Fallback: posizione teorica basata sull'ID
+	return (neighbor_pos_in_orbit * 2 * PI) / satellites_per_orbit
 
 func get_neighbor_health(neighbor_id: int) -> float:
 	if neighbor_id in neighbor_states:
@@ -536,11 +695,10 @@ func handle_neighbor_failure(message: Dictionary):
 		neighbor_states[failed_neighbor].active = false
 		neighbor_states[failed_neighbor].health = 0.0
 		
-		# Reagisci immediatamente al guasto del vicino
-	if not repositioning_active: 
-		var situation = { "coverage_gaps": [failed_neighbor], "critical_neighbors": [] }
-		make_strategic_decisions(situation)  # Forza un nuovo posizionamento
-		#print("Satellite ", satellite_id, " confirmed failure of neighbor ", failed_neighbor)
+		# Reagisci al fallimento solo se non già in riposizionamento
+		if not repositioning_active: 
+			var situation = { "coverage_gaps": [failed_neighbor], "critical_neighbors": [] }
+			make_strategic_decisions(situation)
 
 func handle_neighbor_repositioning_intent(message: Dictionary):
 	"""Gestisce intenzione di riposizionamento del vicino"""
@@ -548,9 +706,9 @@ func handle_neighbor_repositioning_intent(message: Dictionary):
 	var neighbor_target = message.target_position
 	var reason = message.get("reason", "unknown")
 	
-	# Evita collisioni adattando il proprio comportamento
-	#if abs(neighbor_target - theta) < desired_spacing * 0.3:
-		#print("Satellite ", satellite_id, " avoiding collision with neighbor ", neighbor_id)
+	# Verifica potenziali collisioni e adatta comportamento
+	if angle_distance(neighbor_target, theta) < MIN_SAFE_DISTANCE:
+		print("Satellite ", satellite_id, " WARNING: potential collision with neighbor ", neighbor_id)
 		# Potrebbe decidere di aspettare o modificare la propria strategia
 
 func handle_neighbor_repositioning_complete(message: Dictionary):
@@ -562,6 +720,7 @@ func handle_neighbor_repositioning_complete(message: Dictionary):
 	if neighbor_id in neighbor_states:
 		neighbor_states[neighbor_id].position = final_position
 		neighbor_states[neighbor_id].repositioning = false
+
 
 func calculate_orbital_position(radius: float, inclination_deg: float) -> Vector3:
 	"""Calcola la posizione orbitale 3D in modo autonomo"""
@@ -581,3 +740,29 @@ func autonomous_coverage_check():
 	var pos = calculate_orbital_position(orbit_radius, orbit_inclination_deg)
 	# Logica semplificata per verificare la copertura
 	return health_status > 0.7 and active
+	
+# AGGIUNTA: Funzione di debug per identificare problemi
+func debug_repositioning_decision(reason: String, target: float):
+	"""Debug per identificare movimenti anomali"""
+	var distance = angle_distance(theta, target)
+	var distance_deg = rad2deg(distance)
+	
+	print("SAT ", satellite_id, " - REPOSITIONING DEBUG:")
+	print("  Current: ", rad2deg(theta), "°")
+	print("  Target: ", rad2deg(target), "°")
+	print("  Distance: ", distance_deg, "°")
+	print("  Reason: ", reason)
+	print("  Desired spacing: ", rad2deg(desired_spacing), "°")
+	
+	# Controlla se il movimento è ragionevole
+	if distance_deg > 45.0:  # Più di 45° è probabilmente un errore
+		print("  WARNING: Movement too large! Investigating...")
+		
+		# Debug dei vicini
+		print("  Neighbors:")
+		for neighbor_id in [left_neighbor_id, right_neighbor_id]:
+			if neighbor_id in neighbor_states:
+				var state = neighbor_states[neighbor_id]
+				print("    ", neighbor_id, ": active=", state.active, " pos=", rad2deg(state.position), "° health=", state.get("health", 0.0))
+			else:
+				print("    ", neighbor_id, ": NOT IN STATES")
