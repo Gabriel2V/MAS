@@ -54,7 +54,16 @@ const MAX_REPOSITIONING_DISTANCE: float = 0.5  # Massimo movimento consentito
 
 var repositioning_cooldown: float = 10.0
 var cooldown_timer: float = 0.0
-
+var current_repositioning_reason: String = ""
+var repositioning_retry_timer: float = 0.0
+var retry_repositioning_target: float = 0.0
+var safety_check_timer: float = 0.0
+const SAFETY_CHECK_INTERVAL: float = 0.5  # Controlla ogni 0.5 secondi
+var emergency_stop_active: bool = false
+var path_blocked_timer: float = 0.0
+const MAX_PATH_BLOCKED_TIME: float = 3.0
+var repositioning_start_time: int = 0
+const MAX_REPOSITIONING_TIME: int = 30000  # 30 secondi massimo
 
 # Sistema di comunicazione
 func get_comm_system() -> SatelliteCommSystem:
@@ -134,6 +143,14 @@ func _process(delta: float):
 	
 	# 5. Movimento orbitale
 	autonomous_movement(delta * simulation_speed)
+	
+	# Gestione retry riposizionamento
+	if repositioning_retry_timer > 0:
+		repositioning_retry_timer -= delta
+		if repositioning_retry_timer <= 0:
+			# Riprova il riposizionamento se la posizione è ora sicura
+			if not repositioning_active and is_position_safe(retry_repositioning_target):
+				start_autonomous_repositioning(retry_repositioning_target, current_repositioning_reason)
 
 func update_internal_metrics(delta: float):
 	"""Aggiorna metriche interne per decision making"""
@@ -338,16 +355,28 @@ func get_all_active_satellite_positions() -> Array:
 
 func is_position_safe(target_pos: float) -> bool:
 	"""Verifica se una posizione è sicura (non troppo vicina ad altri satelliti)"""
-	var active_positions = get_all_active_satellite_positions()
+	# Controlla distanza da tutti i satelliti conosciuti
+	var positions = [theta]  # La mia posizione
 	
-	for pos in active_positions:
-		if pos == theta:  # Salta la propria posizione
-			continue
-			
-		var distance = angle_distance(target_pos, pos)
-		if distance < MIN_SAFE_DISTANCE:
+	# Posizioni dei vicini diretti
+	for neighbor_id in neighbor_states:
+		if neighbor_states[neighbor_id].active:
+			positions.append(neighbor_states[neighbor_id].position)
+			# Se il vicino ha un target, considera anche quello
+			if neighbor_states[neighbor_id].get("repositioning", false):
+				var target = neighbor_states[neighbor_id].get("target_position", 0.0)
+				positions.append(target)
+	for pos in positions:
+		if pos != theta and angle_distance(target_pos, pos) < MIN_SAFE_DISTANCE:
 			return false
 	
+	
+	# Controlla se altri satelliti stanno convergendo verso questa posizione
+	for neighbor_id in neighbor_states:
+		if neighbor_states[neighbor_id].get("repositioning", false):
+			var neighbor_target = neighbor_states[neighbor_id].get("target_position", 0.0)
+			if angle_distance(target_pos, neighbor_target) < MIN_SAFE_DISTANCE * 2:
+				return false
 	return true
 
 func find_safe_position_in_range(start_pos: float, end_pos: float, steps: int = 10) -> float:
@@ -529,7 +558,18 @@ func autonomous_movement(delta: float):
 		theta += 2 * PI
 
 func execute_repositioning(delta: float):
-	"""Esegue movimento di riposizionamento con controllo anti-glitch"""
+	"""Esegue movimento di riposizionamento con controllo anti-glitch e controlli periodici"""
+	
+	safety_check_timer += delta
+	if safety_check_timer >= SAFETY_CHECK_INTERVAL:
+		if not perform_continuous_safety_check():
+			return  # Movimento interrotto per sicurezza
+		safety_check_timer = 0.0
+	
+	if emergency_stop_active:
+		handle_emergency_stop(delta)
+		return
+	
 	var diff = target_theta - theta
 
 	# Normalizza differenza
@@ -548,7 +588,7 @@ func execute_repositioning(delta: float):
 		direction_timer += delta
 
 	if direction_change_counter >= MAX_DIRECTION_CHANGES and direction_timer < DIRECTION_RESET_TIME:
-		print("[ANTI-GLITCH] Satellite ", satellite_id, " ha rilevato un loop oscillatorio. Forzato stop.")
+		#print("[ANTI-GLITCH] Satellite ", satellite_id, " ha rilevato un loop oscillatorio. Forzato stop.")
 		repositioning_active = false
 		angular_velocity = original_angular_velocity
 		direction_change_counter = 0
@@ -560,13 +600,20 @@ func execute_repositioning(delta: float):
 	if abs(diff) < 0.01:
 		# Riposizionamento completato
 		repositioning_active = false
+		emergency_stop_active = false
 		angular_velocity = original_angular_velocity
-		print("Satellite ", satellite_id, " completed repositioning")
+		path_blocked_timer = 0.0
+		#print("Satellite ", satellite_id, " completed repositioning")
 		# Notifica completamento
 		send_repositioning_complete_notification()
 	else:
 		# Continua movimento verso target
-		angular_velocity = original_angular_velocity * repositioning_speed_multiplier * direction
+		# Controllo percorso
+		if is_immediate_path_blocked(direction):
+			handle_blocked_path(delta)
+			return
+		var safe_velocity = calculate_safe_movement_velocity(direction, diff)
+		angular_velocity = safe_velocity
 
 func start_autonomous_repositioning(new_target: float, reason: String):
 	"""Inizia riposizionamento autonomo con controlli di sicurezza migliorati"""
@@ -575,15 +622,18 @@ func start_autonomous_repositioning(new_target: float, reason: String):
 	var distance = angle_distance(theta, new_target)
 	
 	if distance > MAX_REPOSITIONING_DISTANCE:
-		print("SAT ", satellite_id, " ABORTING repositioning: distance too large (", rad2deg(distance), "°)")
+		#print("SAT ", satellite_id, " ABORTING repositioning: distance too large (", rad2deg(distance), "°)")
 		return
 	
 	if not is_position_safe(new_target):
-		print("SAT ", satellite_id, " ABORTING repositioning: target position not safe")
+		#print("SAT ", satellite_id, " ABORTING repositioning: target position not safe")
 		return
 	cooldown_timer = repositioning_cooldown
 	repositioning_active = true
 	target_theta = new_target
+	repositioning_start_time = OS.get_ticks_msec()  # NUOVO: traccia inizio
+	emergency_stop_active = false  # NUOVO: reset emergenza
+	path_blocked_timer = 0.0  # NUOVO: reset timer blocco
 	
 #	print("SAT ", satellite_id, ": REPOSITIONING START")
 #	print("  - Current pos: ", rad2deg(theta), "°")
@@ -599,7 +649,7 @@ func start_autonomous_repositioning(new_target: float, reason: String):
 		"reason": reason,
 		"timestamp": OS.get_ticks_msec()
 	}
-	
+	current_repositioning_reason = reason  # Salva la ragione
 	send_message_to_neighbor(left_neighbor_id, intent_msg)
 	send_message_to_neighbor(right_neighbor_id, intent_msg)
 
@@ -614,6 +664,10 @@ func receive_message(message: Dictionary):
 			handle_neighbor_repositioning_intent(message)
 		"repositioning_complete":
 			handle_neighbor_repositioning_complete(message)
+		"collision_avoidance":
+			handle_collision_avoidance_notification(message)
+		"priority_claim":
+			handle_priority_claim(message)
 
 func handle_enhanced_heartbeat(message: Dictionary):
 	"""Gestisce heartbeat migliorato con più informazioni"""
@@ -719,11 +773,20 @@ func handle_neighbor_repositioning_intent(message: Dictionary):
 	var neighbor_id = message.sender_id
 	var neighbor_target = message.target_position
 	var reason = message.get("reason", "unknown")
+	var timestamp = message.get("timestamp", 0)
 	
-	# Verifica potenziali collisioni e adatta comportamento
-	if angle_distance(neighbor_target, theta) < MIN_SAFE_DISTANCE:
-		print("Satellite ", satellite_id, " WARNING: potential collision with neighbor ", neighbor_id)
-		# Potrebbe decidere di aspettare o modificare la propria strategia
+	# Aggiorna stato del vicino
+	if neighbor_id in neighbor_states:
+		neighbor_states[neighbor_id].repositioning = true
+		neighbor_states[neighbor_id].target_position = neighbor_target
+	
+	# Verifica potenziali collisioni
+	var collision_distance = angle_distance(neighbor_target, theta)
+	var future_collision_distance = calculate_future_collision_risk(neighbor_id, neighbor_target)
+	
+	if collision_distance < MIN_SAFE_DISTANCE or future_collision_distance < MIN_SAFE_DISTANCE:
+		#print("Satellite ", satellite_id, " COLLISION RISK detected with neighbor ", neighbor_id)
+		execute_collision_avoidance(neighbor_id, neighbor_target, reason)
 
 func handle_neighbor_repositioning_complete(message: Dictionary):
 	"""Gestisce completamento riposizionamento del vicino"""
@@ -780,3 +843,362 @@ func debug_repositioning_decision(reason: String, target: float):
 				print("    ", neighbor_id, ": active=", state.active, " pos=", rad2deg(state.position), "° health=", state.get("health", 0.0))
 			else:
 				print("    ", neighbor_id, ": NOT IN STATES")
+
+func calculate_future_collision_risk(neighbor_id: int, neighbor_target: float) -> float:
+	"""Calcola il rischio di collisione considerando le traiettorie future"""
+	if not (neighbor_id in neighbor_states):
+		return PI  # Distanza massima se non conosco il vicino
+	
+	var neighbor_current = neighbor_states[neighbor_id].position
+	var my_future_pos = theta
+	
+	# Se sono anch'io in riposizionamento, usa la mia posizione target
+	if repositioning_active:
+		my_future_pos = target_theta
+	
+	# Simula il movimento del vicino verso il target
+	var steps = 10
+	var min_distance = PI
+	
+	for i in range(steps + 1):
+		var t = float(i) / float(steps)
+		var neighbor_pos = lerp_angle(neighbor_current, neighbor_target, t)
+		var distance = angle_distance(neighbor_pos, my_future_pos)
+		min_distance = min(min_distance, distance)
+	
+	return min_distance
+
+func execute_collision_avoidance(neighbor_id: int, neighbor_target: float, neighbor_reason: String):
+	"""Esegue manovre di evasione collisione"""
+	
+	# Strategia 1: Se il vicino ha priorità più alta, mi sposto io
+	var i_have_priority = should_i_have_priority(neighbor_id, neighbor_reason)
+	
+	if not i_have_priority:
+		var safe_position = find_collision_avoidance_position(neighbor_target)
+		if safe_position != -1:
+			#print("Satellite ", satellite_id, " executing collision avoidance maneuver")
+			start_autonomous_repositioning(safe_position, "collision_avoidance")
+			
+			# Invia notifica di evasione
+			send_collision_avoidance_notification(neighbor_id, safe_position)
+		else:
+			# Se non trovo posizione sicura, aspetto che il vicino completi
+			#print("Satellite ", satellite_id, " WAITING for neighbor ", neighbor_id, " to complete repositioning")
+			pause_repositioning_until_clear(neighbor_id)
+	else:
+		# Ho priorità, chiedo al vicino di aspettare
+		send_priority_claim_message(neighbor_id)
+
+func should_i_have_priority(neighbor_id: int, neighbor_reason: String) -> bool:
+	"""Determina chi ha priorità in caso di conflitto"""
+	
+	# Priorità per ragioni critiche
+	var critical_reasons = ["gap_coverage", "emergency_repositioning"]
+	var my_reason = get_current_repositioning_reason()
+	
+	# Se sto coprendo un gap critico, ho priorità
+	if my_reason in critical_reasons and not neighbor_reason in critical_reasons:
+		return true
+	
+	# Se il vicino copre gap critico e io no, lui ha priorità
+	if neighbor_reason in critical_reasons and not my_reason in critical_reasons:
+		return false
+	
+	# Se entrambi hanno ragioni critiche o non critiche, usa l'ID
+	# ID più basso ha priorità (per evitare deadlock)
+	return satellite_id < neighbor_id
+
+func find_collision_avoidance_position(neighbor_target: float) -> float:
+	"""Trova una posizione sicura per evitare collisioni"""
+	
+	# Calcola tutte le posizioni occupate/target
+	var occupied_positions = []
+	occupied_positions.append(neighbor_target)  # Posizione target del vicino
+	
+	# Aggiungi posizioni di altri vicini attivi
+	for neighbor_id in neighbor_states:
+		if neighbor_states[neighbor_id].active and neighbor_id != neighbor_target:
+			occupied_positions.append(neighbor_states[neighbor_id].position)
+			if neighbor_states[neighbor_id].get("repositioning", false):
+				var target_pos = neighbor_states[neighbor_id].get("target_position", 0.0)
+				occupied_positions.append(target_pos)
+	
+	# Cerca posizione sicura in cerchi concentrici attorno alla posizione attuale
+	var search_radii = [desired_spacing * 0.5, desired_spacing * 0.8, desired_spacing * 1.2]
+	
+	for radius in search_radii:
+		for angle_offset in [0, PI/4, -PI/4, PI/2, -PI/2, 3*PI/4, -3*PI/4, PI]:
+			var candidate_pos = normalize_angle(theta + angle_offset * radius / desired_spacing)
+			
+			if is_position_globally_safe(candidate_pos, occupied_positions):
+				return candidate_pos
+	
+	return -1.0  # Nessuna posizione sicura trovata
+	
+func send_collision_avoidance_notification(neighbor_id: int, avoidance_position: float):
+	"""Notifica al vicino che sto eseguendo evasione"""
+	var avoidance_msg = {
+		"type": "collision_avoidance",
+		"sender_id": satellite_id,
+		"avoiding_neighbor": neighbor_id,
+		"avoidance_position": avoidance_position,
+		"timestamp": OS.get_ticks_msec()
+	}
+	
+	send_message_to_neighbor(neighbor_id, avoidance_msg)
+	
+func pause_repositioning_until_clear(blocking_neighbor_id: int):
+	"""Mette in pausa il riposizionamento fino a quando il vicino non è libero"""
+	if repositioning_active:
+		repositioning_active = false
+		angular_velocity = original_angular_velocity
+		#print("Satellite ", satellite_id, " paused repositioning due to neighbor ", blocking_neighbor_id)
+		
+		# Imposta un timer per riprovare
+		set_repositioning_retry_timer(5.0)  # Riprova tra 5 secondi
+
+func send_priority_claim_message(neighbor_id: int):
+	"""Rivendica priorità e chiede al vicino di aspettare"""
+	var priority_msg = {
+		"type": "priority_claim",
+		"sender_id": satellite_id,
+		"target_neighbor": neighbor_id,
+		"my_reason": get_current_repositioning_reason(),
+		"timestamp": OS.get_ticks_msec()
+	}
+	
+	send_message_to_neighbor(neighbor_id, priority_msg)
+	
+func get_current_repositioning_reason() -> String:
+	"""Ottieni la ragione del riposizionamento corrente"""
+	# Variabile di istanza aggiornata quando inizia il riposizionamento
+	return current_repositioning_reason if current_repositioning_reason else "optimization"
+
+func is_position_globally_safe(pos: float, occupied_positions: Array) -> bool:
+	"""Verifica se una posizione è sicura rispetto a tutte le posizioni occupate"""
+	for occupied_pos in occupied_positions:
+		if angle_distance(pos, occupied_pos) < MIN_SAFE_DISTANCE:
+			return false
+	return true
+
+func set_repositioning_retry_timer(delay: float):
+	"""Imposta timer per riprovare il riposizionamento"""
+	repositioning_retry_timer = delay
+	retry_repositioning_target = target_theta
+	
+func lerp_angle(from: float, to: float, weight: float) -> float:
+	"""Interpolazione lineare tra angoli considerando la natura circolare"""
+	var diff = to - from
+	
+	# Normalizza la differenza
+	if diff > PI:
+		diff -= 2 * PI
+	elif diff < -PI:
+		diff += 2 * PI
+	
+	return normalize_angle(from + diff * weight)
+	
+func handle_collision_avoidance_notification(message: Dictionary):
+	"""Gestisce notifica di evasione collisione"""
+	var avoiding_satellite = message.sender_id
+	#print("Satellite ", satellite_id, " received collision avoidance notification from ", avoiding_satellite)
+	
+	# Il vicino si sta spostando per evitarmi, posso continuare con sicurezza
+	# Ma tengo traccia della sua nuova posizione
+	if avoiding_satellite in neighbor_states:
+		neighbor_states[avoiding_satellite].target_position = message.avoidance_position
+
+func handle_priority_claim(message: Dictionary):
+	"""Gestisce rivendicazione di priorità"""
+	var claiming_satellite = message.sender_id
+	var their_reason = message.get("my_reason", "unknown")
+	
+	# Valuta se accettare la loro priorità
+	if not should_i_have_priority(claiming_satellite, their_reason):
+		#print("Satellite ", satellite_id, " yielding priority to ", claiming_satellite)
+		pause_repositioning_until_clear(claiming_satellite)
+	#else:
+		#print("Satellite ", satellite_id, " maintaining priority over ", claiming_satellite)
+		# Continua con il proprio riposizionamento
+
+func perform_continuous_safety_check() -> bool:
+	"""Esegue controlli di sicurezza durante il movimento"""
+	# 1. Verifica se il target è ancora sicuro
+	if not is_position_safe(target_theta):
+		trigger_emergency_stop("target_unsafe")
+		return false
+	
+	# 2. Verifica satelliti in avvicinamento
+	var approaching_satellites = detect_approaching_satellites()
+	if approaching_satellites.size() > 0:
+		#print("Satellite ", satellite_id, " detected ", approaching_satellites.size(), " approaching satellites")
+		if not handle_approaching_satellites(approaching_satellites):
+			return false
+	
+	# 3. Verifica stato di salute
+	if health_status < 0.3:
+		#print("Satellite ", satellite_id, " health too low for complex maneuvers - EMERGENCY STOP")
+		trigger_emergency_stop("low_health")
+		return false
+	
+	# 4. Verifica tempo massimo di riposizionamento
+	var repositioning_time = OS.get_ticks_msec() - repositioning_start_time
+	if repositioning_time > MAX_REPOSITIONING_TIME:
+		#print("Satellite ", satellite_id, " repositioning taking too long - EMERGENCY STOP")
+		trigger_emergency_stop("timeout")
+		return false
+	
+	return true
+
+func detect_approaching_satellites() -> Array:
+	"""Rileva satelliti che si stanno avvicinando alla mia posizione o percorso"""
+	var approaching = []
+	var my_velocity_direction = sign(angular_velocity)
+	
+	for neighbor_id in neighbor_states:
+		if not neighbor_states[neighbor_id].active:
+			continue
+			
+		var neighbor_pos = neighbor_states[neighbor_id].position
+		var distance = angle_distance(theta, neighbor_pos)
+		
+		# Se è molto vicino, è un problema
+		if distance < MIN_SAFE_DISTANCE * 2:
+			approaching.append({
+				"id": neighbor_id,
+				"position": neighbor_pos,
+				"distance": distance,
+				"threat_level": "immediate"
+				})
+			continue
+		 
+		# Se si sta muovendo e il percorso si incrocia con il mio
+		if neighbor_states[neighbor_id].get("repositioning", false):
+			var neighbor_target = neighbor_states[neighbor_id].get("target_position", neighbor_pos)
+			if will_paths_intersect(theta, target_theta, neighbor_pos, neighbor_target):
+				approaching.append({
+					"id": neighbor_id,
+					"position": neighbor_pos,
+					"target": neighbor_target,
+					"distance": distance,
+					"threat_level": "path_intersection"
+					})
+	return approaching
+
+func will_paths_intersect(my_start: float, my_end: float, their_start: float, their_end: float) -> bool:
+	"""Verifica se due percorsi orbitali si intersecheranno"""
+	
+	# Normalizza tutti gli angoli
+	my_start = normalize_angle(my_start)
+	my_end = normalize_angle(my_end)
+	their_start = normalize_angle(their_start)
+	their_end = normalize_angle(their_end)
+	
+	# Simula il movimento in piccoli step per verificare intersezioni
+	var steps = 20
+	var my_path = []
+	var their_path = []
+	
+	for i in range(steps + 1):
+		var t = float(i) / float(steps)
+		my_path.append(lerp_angle(my_start, my_end, t))
+		their_path.append(lerp_angle(their_start, their_end, t))
+	
+	# Verifica se i percorsi si avvicinano troppo
+	for i in range(my_path.size()):
+		for j in range(their_path.size()):
+			if angle_distance(my_path[i], their_path[j]) < MIN_SAFE_DISTANCE:
+				return true
+	
+	return false
+
+func handle_approaching_satellites(approaching: Array) -> bool:
+	"""Gestisce satelliti in avvicinamento"""
+	
+	for sat_info in approaching:
+		var threat_level = sat_info.threat_level
+		var sat_id = sat_info.id
+		
+		match threat_level:
+			"immediate":
+				# Minaccia immediata - stop di emergenza
+				#print("Satellite ", satellite_id, " IMMEDIATE THREAT from ", sat_id, " - EMERGENCY STOP")
+				trigger_emergency_stop("immediate_collision_risk")
+				return false
+			"path_intersection":
+				# Percorsi che si incrociano - negozia o evita
+				if should_i_have_priority(sat_id, "path_intersection"):
+					# Ho priorità, continuo ma rallento
+				#	print("Satellite ", satellite_id, " maintaining course but slowing down")
+					repositioning_speed_multiplier = min(repositioning_speed_multiplier, 1.5)
+				else:
+					# Non ho priorità, rallento tanto
+				#	print("Satellite ", satellite_id, " yielding right of way to ", sat_id)
+					repositioning_speed_multiplier =  min(repositioning_speed_multiplier, 1)
+	return true
+
+func is_immediate_path_blocked(direction: int) -> bool:
+	"""Verifica se il percorso immediato è bloccato"""
+	var next_position = normalize_angle(theta + direction * angular_velocity * 0.1)  # Posizione tra 0.1 secondi
+	
+	for neighbor_id in neighbor_states:
+		if neighbor_states[neighbor_id].active:
+			var neighbor_pos = neighbor_states[neighbor_id].position
+			if angle_distance(next_position, neighbor_pos) < MIN_SAFE_DISTANCE:
+				return true
+	return false
+
+func handle_blocked_path(delta: float):
+	"""Gestisce percorso bloccato"""
+	path_blocked_timer += delta
+	
+	if path_blocked_timer > MAX_PATH_BLOCKED_TIME:
+		trigger_emergency_stop("path_permanently_blocked")
+	else:
+		# Rallenta e aspetta
+		angular_velocity = original_angular_velocity * 0.3 * sign(target_theta - theta)
+		#print("Satellite ", satellite_id, " path temporarily blocked - slowing down")
+
+func calculate_safe_movement_velocity(direction: int, diff: float) -> float:
+	"""Calcola velocità sicura basata sulla situazione attuale"""
+	var base_velocity = original_angular_velocity * repositioning_speed_multiplier * direction
+	
+	
+	# Rallenta quando si avvicina al target
+	var distance_to_target = abs(diff)
+	var approach_factor = min(1.0, distance_to_target / (desired_spacing * 0.5))
+	
+	# Rallenta se la salute è bassa
+	var health_factor = max(0.3, health_status)
+	
+	return base_velocity * approach_factor * health_factor
+
+func trigger_emergency_stop(reason: String):
+	"""Attiva stop di emergenza"""
+	emergency_stop_active = true
+	angular_velocity = original_angular_velocity
+	repositioning_active = false
+	
+	#print("Satellite ", satellite_id, " EMERGENCY STOP: ", reason)
+	
+	# Informa i vicini
+	var emergency_msg = {
+		"type": "emergency_stop",
+		"sender_id": satellite_id,
+		"reason": reason,
+		"position": theta,
+		"timestamp": OS.get_ticks_msec()
+		}
+	send_message_to_neighbor(left_neighbor_id, emergency_msg)
+	send_message_to_neighbor(right_neighbor_id, emergency_msg)
+	
+	# Imposta cooldown più lungo per emergenze
+	cooldown_timer = repositioning_cooldown * 2
+
+func handle_emergency_stop(delta: float):
+	"""Gestisce stato di emergenza"""
+	# Aspetta un po' prima di riprovare
+	if cooldown_timer <= 0:
+		emergency_stop_active = false
+		#print("Satellite ", satellite_id, " emergency resolved - ready for new decisions")
