@@ -90,7 +90,7 @@ func update_coverage(satellites: Array):
 			sat_total_orbits = satellite.total_orbits
 		
 		# Verifica se il satellite può fornire copertura
-		if not is_active or health <= 0.0 or health < 0.7:
+		if not is_active or health <= 0.0 or health < 0.2:
 			continue
 			
 		# Calcola posizione orbitale
