@@ -109,7 +109,7 @@ Quando un malfunzionamento viene rilevato:
 ### Avvio
 1. Checkout del branch accentrato:
 ```bash
-git checkout centralized-control
+git checkout centralized
 ```
 
 2. Apertura in Godot Engine
