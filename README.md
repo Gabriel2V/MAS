@@ -105,7 +105,7 @@ Modulo di raccolta e analisi dati sperimentali:
 
 1. Clona il repository:
 ```bash
-git clone https://github.com/username/leo-satellite-constellation.git
+git clone [https://github.com/Gabriel2V/MAS.git]
 ```
 
 2. Apri il progetto in Godot Engine
